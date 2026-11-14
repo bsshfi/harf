@@ -1,0 +1,19 @@
+# سيرفر حَرف (harf-api) — نشر تلقائي من GitHub عبر Cloudflare Workers Builds
+# التطبيق نفسه على GitHub Pages (harf.wamdarc.com)، هذا الملف للسيرفر فقط.
+name = "harf-api"
+main = "worker/worker.js"
+compatibility_date = "2026-10-01"
+workers_dev = true
+keep_vars = true
+
+[[d1_databases]]
+binding = "DB"
+database_name = "harf"
+database_id = "320de743-f510-4b95-b47b-b2fe68c395ac"
+
+# تشغيل السيرفر قرب قاعدة البيانات = ردود أسرع
+[placement]
+mode = "smart"
+
+[observability]
+enabled = true
