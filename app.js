@@ -334,12 +334,12 @@
     else if (gm.status === 'score') rScore();
     else if (gm.status === 'done') rDone(full);
   }
-  function gtop(sub) {
+  function gtop(sub, extra) {
     const gm = G.s.game;
     const chip = gm.status === 'lobby' ? (isHost() ? 'أنت المضيف' : 'بانتظار المضيف') : gm.status === 'done' ? 'انتهت' : 'الجولة ' + gm.round + ' من ' + gm.settings.rounds;
-    return '<header class="gtop"><button class="icb" id="gBack" aria-label="رجوع للرئيسية">' + IC.back + '</button>' +
-      '<div class="gname"><b>' + esc(gm.name) + '</b><small>#' + gm.id + (sub ? ' · ' + sub : '') + '</small></div>' +
-      '<span class="rchip">' + chip + '</span><button class="icb" id="gMenu" aria-label="خيارات">' + IC.more + '</button></header>';
+    return '<header class="gtop"><div class="gr"><button class="icb" id="gBack" aria-label="رجوع للرئيسية">' + IC.back + '</button>' +
+      '<div class="gname"><b>' + esc(gm.name) + '</b><small><bdi>#' + gm.id + '</bdi>' + (sub ? ' · ' + sub : '') + '</small></div>' +
+      '<span class="rchip">' + chip + '</span><button class="icb" id="gMenu" aria-label="خيارات">' + IC.more + '</button></div>' + (extra ? '<div class="gx">' + extra + '</div>' : '') + '</header>';
   }
   function bindTop() {
     $('#gBack').onclick = leaveToHome;
@@ -654,9 +654,8 @@
   function rDone(full) {
     const s = G.s, gm = s.game, rows = (s.results && s.results.players) || ranking();
     const win = rows.filter((r) => r.rank === 1 && r.score > 0);
-    $('#v-game').innerHTML = gtop() +
-      '<div style="text-align:center;color:#fff;margin-top:10px"><div style="font-size:15px;opacity:.95">انتهت اللعبة</div><div style="font-family:var(--fun);font-weight:800;font-size:32px;line-height:1.3;text-shadow:0 2px 10px rgba(40,60,90,.2)">' +
-      (win.length ? (win.length > 1 ? 'تعادل! ' : 'الفايز: ') + esc(win.map((w) => w.name).join(' و ')) : 'ولا نقطة! نعيدها؟') + '</div></div>' +
+    $('#v-game').innerHTML = gtop('', '<div class="win-t">انتهت اللعبة</div><div class="win-n">' +
+      (win.length ? (win.length > 1 ? 'تعادل! ' : 'الفايز: ') + esc(win.map((w) => w.name).join(' و ')) : 'ولا نقطة! نعيدها؟') + '</div>') +
       podiumHTML(rows) +
       '<div class="gl tbl">' + rows.map((p) => '<div class="tr' + (p.rank === 1 && p.score ? ' lead' : '') + '"><span class="rk">' + p.rank + '</span><span class="who">' + av(p.name, p.color, 'sm') + '<b>' + esc(p.name) + '</b></span><span></span><span class="tot">' + p.score + '</span></div>').join('') + '</div>' +
       roundsGrid(s.rounds, rows) +
@@ -671,7 +670,7 @@
   }
   function confetti() {
     const box = document.createElement('div'); box.className = 'confetti';
-    const cols = ['#f5841f', '#ffb067', '#7fa6c6', '#2f9a68', '#f5b62a', '#c2185b', '#6a45c9'];
+    const cols = ['#f5841f', '#ffb067', '#2BB3A3', '#0F7A71', '#f5b62a', '#c2185b', '#FFF4E2'];
     for (let i = 0; i < 70; i++) { const el = document.createElement('i'); el.style.left = Math.random() * 100 + '%'; el.style.background = cols[i % cols.length]; el.style.animationDuration = 2 + Math.random() * 2 + 's'; el.style.animationDelay = Math.random() * 0.8 + 's'; box.appendChild(el); }
     document.body.appendChild(box); setTimeout(() => box.remove(), 5200);
   }
@@ -793,7 +792,7 @@
       };
     });
   }
-  function pTop() { return '<header class="gtop"><button class="icb" id="ppBack" aria-label="رجوع">' + IC.back + '</button><div class="gname"><b>' + esc(P.name) + '</b><small>على ورقة</small></div><span class="rchip">' + (P.phase === 'done' ? 'انتهت' : 'الجولة ' + P.round + ' من ' + P.settings.rounds) + '</span></header>'; }
+  function pTop(extra) { return '<header class="gtop"><div class="gr"><button class="icb" id="ppBack" aria-label="رجوع">' + IC.back + '</button><div class="gname"><b>' + esc(P.name) + '</b><small>على ورقة</small></div><span class="rchip">' + (P.phase === 'done' ? 'انتهت' : 'الجولة ' + P.round + ' من ' + P.settings.rounds) + '</span></div>' + (extra ? '<div class="gx">' + extra + '</div>' : '') + '</header>'; }
   function pBind() { $('#ppBack').onclick = () => { if (P.phase === 'done') { P = null; show('home'); return; } confirmSheet('تطلع من اللعبة؟', 'النقاط اللي سجلتها تنحفظ في السجل.', 'اطلع', () => { paperSave(); P = null; clearInterval(paperT); show('home'); }); }; }
   function paperNext() {
     if (P.round >= P.settings.rounds) return paperDone();
@@ -856,7 +855,7 @@
     const ps = P.players.slice().sort((a, b) => b.score - a.score);
     let rank = 0, prev = null; const rows = ps.map((p, i) => { if (p.score !== prev) { rank = i + 1; prev = p.score; } return Object.assign({ rank }, p); });
     const win = rows.filter((r) => r.rank === 1 && r.score > 0);
-    $('#v-paper').innerHTML = pTop() + '<div style="text-align:center;color:#fff;margin-top:10px"><div style="font-size:15px">انتهت اللعبة</div><div style="font-family:var(--fun);font-weight:800;font-size:32px;text-shadow:0 2px 10px rgba(40,60,90,.2)">' + (win.length ? 'الفايز: ' + esc(win.map((w) => w.name).join(' و ')) : 'نعيدها؟') + '</div></div>' +
+    $('#v-paper').innerHTML = pTop('<div class="win-t">انتهت اللعبة</div><div class="win-n">' + (win.length ? 'الفايز: ' + esc(win.map((w) => w.name).join(' و ')) : 'نعيدها؟') + '</div>') +
       podiumHTML(rows) + '<div class="gl tbl">' + rows.map((p) => '<div class="tr"><span class="rk">' + p.rank + '</span><span class="who">' + av(p.name, p.color, 'sm') + '<b>' + esc(p.name) + '</b></span><span></span><span class="tot">' + p.score + '</span></div>').join('') + '</div>' +
       '<p class="wait">انحفظت في السجل: ورقة ' + P.n + ' · ' + esc(P.name) + '</p><button class="link-btn primary" id="ppShare">' + IC.share + 'شارك النتيجة</button><button class="link-btn" id="ppHome">الرئيسية</button>';
     pBind(); SND.win(); confetti();
@@ -884,7 +883,7 @@
   function applyTheme() {
     document.documentElement.setAttribute('data-theme', S.theme || 'auto');
     const dark = S.theme === 'dark' || (S.theme !== 'light' && lightMQ && lightMQ.matches);
-    const m = document.querySelector('meta[name=theme-color]'); if (m) m.content = dark ? '#0c1424' : '#7fa6c6';
+    const m = document.querySelector('meta[name=theme-color]'); if (m) m.content = dark ? '#04211F' : '#0A5953';
   }
   if (lightMQ && lightMQ.addEventListener) lightMQ.addEventListener('change', applyTheme);
 

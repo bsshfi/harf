@@ -1,5 +1,5 @@
 /* حَرف — يعمل بدون إنترنت (اللعب على ورقة والسجل). غيّر رقم الإصدار مع كل تحديث */
-const VERSION = 'harf-1.0.0';
+const VERSION = 'harf-1.1.0';
 const SHELL = ['./', 'index.html', 'config.js', 'app.js', 'qr.js', 'wamd-stats.js', 'wamd-cfg.js', 'privacy.html', 'manifest.webmanifest',
   'icons/wamdarc-light.png', 'icons/wamdarc-dark.png', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png', 'icons/icon-maskable-512.png'];
 

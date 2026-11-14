@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>حرف | Harf</title>
 <meta name="description" content="حَرف — إنسان حيوان نبات جماد بلاد، لعبة جماعية للعائلة والأصحاب، كل واحد يلعب من جهازه">
-<meta name="theme-color" content="#7fa6c6">
+<meta name="theme-color" content="#0A5953">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -24,16 +24,16 @@
 (function(){try{var s=JSON.parse(localStorage.getItem('harf')||'{}');document.documentElement.setAttribute('data-theme',s.theme||'auto');}catch(e){}})();
 </script>
 <style>
-/* ===== حَرف 1.0 — هوية ومض آرك الموحّدة (سهم، فلق، سراج، نبض): سماء ضبابية تذوب في الرمل، ألواح زجاجية، ولون برتقالي واحد ===== */
+/* ===== حَرف 1.1 — هوية ومض آرك (الشريط السفلي، الإعدادات، شعار ومض آرك) بألوان حَرف: طاولة لعب خضراء مزرقة، حجارة حروف كريمية، وبرتقالي ومض آرك ===== */
 :root{
-  --sky1:#7fa6c6; --sky2:#b9cddb; --haze:#e9dfd3; --sand:#f4ede4; --sand2:#efe6da;
-  --r1:#c9cfd6; --r2:#d8d6d2; --r3:#e4dcd2; --r4:#ece3d8;
-  --panel:rgba(255,255,255,.66); --panel2:rgba(255,255,255,.5); --line:rgba(255,255,255,.8); --line-2:rgba(60,64,72,.14); --sep:rgba(120,110,100,.16);
-  --fg:#22262e; --dim:#656a74; --faint:#8d9099; --gsh:rgba(80,70,60,.12);
-  --arrow:#f5841f; --arrow2:#d4610b; --accent:#b8500a; --good:#22804f; --good-bg:rgba(47,154,104,.14);
-  --dup:#8a5a00; --dup-bg:rgba(245,182,42,.2); --bad:#b42d22; --bad-bg:rgba(220,70,60,.12); --tie:#5b3fc4; --tie-bg:rgba(108,75,214,.13);
-  --sheet:#fbf8f4; --toast-bg:#22262e; --toast-fg:#fff; --scrim:rgba(58,50,42,.35); --soft:rgba(60,64,72,.07);
-  --tile:#fff8ee; --tile-ink:#d4610b; --tile-sh:#e8d6bf;
+  --sky1:#0A5953; --sky2:#0F7A71; --haze:#16A08F; --sand:#FAF5EA; --sand2:#F6EFE2;
+  --panel:#FFFFFF; --panel2:#F7F1E6; --line:#EFE6D6; --line-2:rgba(30,50,48,.14); --sep:rgba(60,50,30,.1); --edge:#E6DAC4;
+  --fg:#1C2B29; --dim:#5A6865; --faint:#86918E; --gsh:rgba(40,60,55,.10);
+  --arrow:#f5841f; --arrow2:#d4610b; --accent:#b8500a; --good:#1d7a4b; --good-bg:rgba(47,154,104,.13);
+  --teal:#0F7A71; --teal-ink:#0B5F58; --teal-soft:rgba(15,122,113,.1);
+  --dup:#8a5a00; --dup-bg:rgba(245,182,42,.2); --bad:#b42d22; --bad-bg:rgba(220,70,60,.11); --tie:#5b3fc4; --tie-bg:rgba(108,75,214,.12);
+  --sheet:#FFFBF3; --toast-bg:#1C2B29; --toast-fg:#fff; --scrim:rgba(20,40,38,.4); --soft:rgba(15,80,72,.07);
+  --tile:#FFF4E2; --tile-ink:#d4610b; --tile-sh:#EAD9BD;
   --ui:'IBM Plex Sans Arabic',-apple-system,'SF Arabic','Geeza Pro',system-ui,sans-serif;
   --fun:'Baloo Bhaijaan 2','IBM Plex Sans Arabic',system-ui,sans-serif;
   --num:-apple-system,'SF Pro Rounded','SF Pro Display',system-ui,'IBM Plex Sans Arabic',sans-serif;
@@ -41,24 +41,24 @@
   color-scheme:light;
 }
 :root[data-theme="dark"]{
-  --sky1:#0c1424; --sky2:#1b2740; --haze:#2a3247; --sand:#151b2a; --sand2:#121827;
-  --r1:#2a3550; --r2:#232c43; --r3:#1d2539; --r4:#181f31;
-  --panel:rgba(255,255,255,.08); --panel2:rgba(255,255,255,.05); --line:rgba(255,255,255,.12); --line-2:rgba(255,255,255,.16); --sep:rgba(255,255,255,.09);
-  --fg:#eef1f6; --dim:#a3abbd; --faint:#7d869c; --gsh:rgba(0,0,0,.35); --accent:#ffa55a; --good:#5fd39b; --good-bg:rgba(95,211,155,.14);
+  --sky1:#04211F; --sky2:#073A36; --haze:#0B4C46; --sand:#0D1B1A; --sand2:#0B1716;
+  --panel:#152826; --panel2:#1B302D; --line:rgba(255,255,255,.07); --line-2:rgba(255,255,255,.16); --sep:rgba(255,255,255,.08); --edge:#071110;
+  --fg:#E9F3F0; --dim:#A4B6B2; --faint:#768B87; --gsh:rgba(0,0,0,.35); --accent:#ffa55a; --good:#5fd39b; --good-bg:rgba(95,211,155,.14);
+  --teal:#2BB3A3; --teal-ink:#86E3D7; --teal-soft:rgba(43,179,163,.15);
   --dup:#ffd27a; --dup-bg:rgba(255,210,122,.14); --bad:#ff8f85; --bad-bg:rgba(255,143,133,.13); --tie:#c3b3ff; --tie-bg:rgba(195,179,255,.14);
-  --sheet:#1a2133; --toast-bg:#eef1f6; --toast-fg:#121827; --scrim:rgba(0,0,0,.55); --soft:rgba(255,255,255,.07);
-  --tile:#2b2f45; --tile-ink:#ffa55a; --tile-sh:#151827;
+  --sheet:#13211F; --toast-bg:#E9F3F0; --toast-fg:#0B1716; --scrim:rgba(0,0,0,.55); --soft:rgba(255,255,255,.07);
+  --tile:#24403C; --tile-ink:#ffb067; --tile-sh:#0A1918;
   color-scheme:dark;
 }
 @media (prefers-color-scheme:dark){
   :root[data-theme="auto"]{
-    --sky1:#0c1424; --sky2:#1b2740; --haze:#2a3247; --sand:#151b2a; --sand2:#121827;
-    --r1:#2a3550; --r2:#232c43; --r3:#1d2539; --r4:#181f31;
-    --panel:rgba(255,255,255,.08); --panel2:rgba(255,255,255,.05); --line:rgba(255,255,255,.12); --line-2:rgba(255,255,255,.16); --sep:rgba(255,255,255,.09);
-    --fg:#eef1f6; --dim:#a3abbd; --faint:#7d869c; --gsh:rgba(0,0,0,.35); --accent:#ffa55a; --good:#5fd39b; --good-bg:rgba(95,211,155,.14);
-    --dup:#ffd27a; --dup-bg:rgba(255,210,122,.14); --bad:#ff8f85; --bad-bg:rgba(255,143,133,.13); --tie:#c3b3ff; --tie-bg:rgba(195,179,255,.14);
-    --sheet:#1a2133; --toast-bg:#eef1f6; --toast-fg:#121827; --scrim:rgba(0,0,0,.55); --soft:rgba(255,255,255,.07);
-    --tile:#2b2f45; --tile-ink:#ffa55a; --tile-sh:#151827;
+  --sky1:#04211F; --sky2:#073A36; --haze:#0B4C46; --sand:#0D1B1A; --sand2:#0B1716;
+  --panel:#152826; --panel2:#1B302D; --line:rgba(255,255,255,.07); --line-2:rgba(255,255,255,.16); --sep:rgba(255,255,255,.08); --edge:#071110;
+  --fg:#E9F3F0; --dim:#A4B6B2; --faint:#768B87; --gsh:rgba(0,0,0,.35); --accent:#ffa55a; --good:#5fd39b; --good-bg:rgba(95,211,155,.14);
+  --teal:#2BB3A3; --teal-ink:#86E3D7; --teal-soft:rgba(43,179,163,.15);
+  --dup:#ffd27a; --dup-bg:rgba(255,210,122,.14); --bad:#ff8f85; --bad-bg:rgba(255,143,133,.13); --tie:#c3b3ff; --tie-bg:rgba(195,179,255,.14);
+  --sheet:#13211F; --toast-bg:#E9F3F0; --toast-fg:#0B1716; --scrim:rgba(0,0,0,.55); --soft:rgba(255,255,255,.07);
+  --tile:#24403C; --tile-ink:#ffb067; --tile-sh:#0A1918;
     color-scheme:dark;
   }
 }
@@ -76,36 +76,31 @@ a{color:var(--accent)}
 .fd{font-family:var(--fun);font-weight:800}
 .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 
-/* الخلفية: سماء ← ضباب ← رمل، مع تلال باهتة (نفس سهم وفلق) */
-.bg3{position:fixed;inset:0;z-index:0;pointer-events:none;background:linear-gradient(180deg,var(--sky1) 0%,var(--sky2) 22%,var(--haze) 44%,var(--sand) 68%,var(--sand2) 100%)}
-.bg3 svg{position:absolute;left:0;width:100%;height:30%}
-.bg3 .r1{fill:var(--r1);opacity:.55}.bg3 .r2{fill:var(--r2);opacity:.7}.bg3 .r3{fill:var(--r3);opacity:.8}.bg3 .r4{fill:var(--r4);opacity:.9}
-.st3{position:absolute;inset:0 0 62% 0;display:none;background-image:radial-gradient(1.2px 1.2px at 12% 20%,#fff 70%,transparent),radial-gradient(1px 1px at 30% 8%,#fff 70%,transparent),radial-gradient(1.2px 1.2px at 52% 16%,#fff 70%,transparent),radial-gradient(1px 1px at 70% 30%,#fff 70%,transparent),radial-gradient(1.3px 1.3px at 88% 12%,#fff 70%,transparent),radial-gradient(1px 1px at 8% 44%,#fff 70%,transparent),radial-gradient(1px 1px at 40% 36%,#fff 70%,transparent),radial-gradient(1.1px 1.1px at 62% 6%,#fff 70%,transparent);opacity:.7}
-:root[data-theme="dark"] .st3{display:block}
-@media (prefers-color-scheme:dark){:root[data-theme="auto"] .st3{display:block}}
-
+/* الخلفية: ورق كريمي، والطاولة الخضراء في رأس كل صفحة */
+.bg3{position:fixed;inset:0;z-index:0;pointer-events:none;background:var(--sand2)}
 .app{position:relative;z-index:1;max-width:480px;margin:0 auto;padding:calc(var(--safe-t) + 10px) 16px calc(var(--safe-b) + 104px);min-height:100vh}
 body.ingame .app{padding-bottom:calc(var(--safe-b) + 24px)}
 body.ingame .tabs{display:none}
 .view{display:none}.view.on{display:block;animation:fade .25s ease}
 @keyframes fade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
 
-/* الزجاج */
-.gl,.panel,.set,.tabs,.seg,.sheet,.chip,.pl,.ans,.hist,.big-btn{-webkit-backdrop-filter:blur(16px) saturate(1.3);backdrop-filter:blur(16px) saturate(1.3)}
-.gl,.panel{background:var(--panel);border:1px solid var(--line);border-radius:24px;box-shadow:0 10px 28px var(--gsh)}
+.gl,.panel{background:var(--panel);border:1px solid var(--line);border-radius:24px;box-shadow:0 3px 0 var(--edge),0 12px 26px var(--gsh)}
 .panel{padding:16px;margin-top:12px}
 .panel h2{font-size:17px;margin:0 0 4px}
 .panel .sub{font-size:13px;color:var(--dim);margin:0 0 8px}
 
-/* الرأس */
-.top{display:flex;align-items:center;gap:10px;color:#fff;min-height:58px}
+/* الرأس: طاولة اللعب (أخضر مزرق + حجارة حروف باهتة) بحافة سفلية مدوّرة */
+.top,.gtop{position:relative;margin:calc(-10px - var(--safe-t)) -16px 0;padding:calc(var(--safe-t) + 16px) 18px 22px;color:#fff;border-radius:0 0 30px 30px;
+  background:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='140' height='120'><g fill='none' stroke='%23fff' stroke-opacity='.13' stroke-width='1.5'><rect x='10' y='14' width='26' height='26' rx='7' transform='rotate(-12 23 27)'/><rect x='78' y='8' width='22' height='22' rx='6' transform='rotate(10 89 19)'/><rect x='50' y='66' width='30' height='30' rx='8' transform='rotate(-6 65 81)'/><rect x='108' y='70' width='18' height='18' rx='5' transform='rotate(14 117 79)'/></g><g fill='%23fff' fill-opacity='.16'><circle cx='30' cy='94' r='2'/><circle cx='120' cy='44' r='1.6'/><circle cx='60' cy='30' r='1.3'/></g></svg>") 0 0/140px 120px,linear-gradient(165deg,var(--haze) 0%,var(--sky2) 45%,var(--sky1) 100%);
+  box-shadow:0 4px 0 var(--edge),0 14px 30px rgba(10,60,55,.18)}
+.top{display:flex;align-items:center;gap:10px;min-height:58px}
 .brand{display:flex;flex-direction:column;align-items:flex-start}
 .bw{display:flex;align-items:center;gap:8px}
 .logo{margin:0;font-size:34px;font-weight:700;line-height:1.05;color:#fff;text-shadow:0 1px 8px rgba(40,60,90,.18)}
 .ltile{width:30px;height:30px;border-radius:9px;background:linear-gradient(180deg,#ffb067,var(--arrow));color:#fff;display:grid;place-items:center;font-family:var(--fun);font-weight:800;font-size:19px;padding-top:4px;box-shadow:0 3px 0 var(--arrow2),0 6px 14px rgba(245,132,31,.3)}
 .ptitle{font-size:12.5px;color:rgba(255,255,255,.94);font-weight:500;margin-top:2px}
 .top .end{margin-inline-start:auto;display:flex;gap:8px;align-items:center}
-.icb{width:44px;height:44px;border-radius:15px;background:rgba(255,255,255,.26);border:1px solid rgba(255,255,255,.5);color:#fff;display:grid;place-items:center;flex:none}
+.icb{width:44px;height:44px;border-radius:15px;background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.3);color:#fff;display:grid;place-items:center;flex:none}
 .icb svg{width:22px;height:22px}
 :root[data-theme="dark"] .icb{background:rgba(255,255,255,.1);border-color:rgba(255,255,255,.16)}
 @media (prefers-color-scheme:dark){:root[data-theme="auto"] .icb{background:rgba(255,255,255,.1);border-color:rgba(255,255,255,.16)}}
@@ -153,7 +148,7 @@ body.ingame .tabs{display:none}
 .av.sm{width:30px;height:30px;font-size:14px;padding-top:3px}
 .av.lg{width:58px;height:58px;font-size:27px}
 .av .on{position:absolute;bottom:0;inset-inline-end:0;width:11px;height:11px;border-radius:50%;background:#2fbf71;border:2px solid var(--sheet)}
-.avs{display:flex}.avs .av{border:2px solid var(--sand)}.avs .av+.av{margin-inline-start:-9px}
+.avs{display:flex}.avs .av{border:2px solid var(--panel)}.avs .av+.av{margin-inline-start:-9px}
 
 /* الإعدادات */
 .set-group{margin-top:18px}
@@ -209,11 +204,12 @@ body.ingame .tabs{display:none}
 .empty .tiles .tile{width:46px;height:46px;font-size:27px;padding-top:7px;border-radius:14px}
 
 /* شاشة اللعبة */
-.gtop{display:flex;align-items:center;gap:10px;color:#fff;min-height:54px}
+.gtop .gr{display:flex;align-items:center;gap:10px;min-height:48px}
+.gtop .gx{text-align:center;margin-top:8px}
 .gtop .gname{flex:1;min-width:0}
 .gtop .gname b{display:block;font-size:19px;line-height:1.2;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .gtop .gname small{font-size:12.5px;opacity:.94}
-.rchip{background:rgba(255,255,255,.26);border:1px solid rgba(255,255,255,.5);color:#fff;border-radius:999px;padding:6px 12px;font-size:13px;font-weight:700;white-space:nowrap}
+.rchip{background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.3);color:#fff;border-radius:999px;padding:6px 12px;font-size:13px;font-weight:700;white-space:nowrap}
 :root[data-theme="dark"] .rchip{background:rgba(255,255,255,.1);border-color:rgba(255,255,255,.16)}
 .net{position:fixed;top:calc(var(--safe-t) + 6px);left:50%;transform:translateX(-50%);z-index:30;background:var(--toast-bg);color:var(--toast-fg);font-size:12.5px;padding:4px 12px;border-radius:999px;opacity:.9}
 
@@ -294,7 +290,7 @@ body.ingame .tabs{display:none}
 .cats{display:flex;gap:6px;overflow-x:auto;margin:10px -16px 0;padding:2px 16px 4px;scrollbar-width:none}
 .cats::-webkit-scrollbar{display:none}
 .cats button{flex:none;font-size:14px;font-weight:600;border-radius:999px;padding:7px 14px;background:var(--panel);border:1px solid var(--line);color:var(--dim)}
-.cats button.on{background:var(--fg);color:var(--sand);border-color:transparent}
+
 .cats button.seen{color:var(--fg)}
 .rtitle{font-size:20px;font-weight:700;margin:14px 6px 2px}
 .rtitle small{display:block;font-size:13px;color:var(--dim);font-weight:500}
@@ -436,15 +432,47 @@ body.gated .tabs{display:none}
 .steps svg{vertical-align:-5px;display:inline-block;margin:0 2px}
 .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(var(--safe-b) + 92px);background:var(--toast-bg);color:var(--toast-fg);padding:10px 18px;border-radius:999px;font-size:14px;z-index:60;opacity:0;pointer-events:none;transition:opacity .25s;max-width:calc(100% - 40px);text-align:center;box-shadow:0 8px 20px rgba(0,0,0,.18)}
 .toast.on{opacity:1}
+/* ===== حَرف 1.1: لمسات اللعبة ===== */
+.set,.big-btn,.hist,.pl,.ans,.fld,.link-btn{background:var(--panel);border:1px solid var(--line);box-shadow:0 3px 0 var(--edge),0 10px 22px var(--gsh)}
+.fld{border-width:1.5px;-webkit-backdrop-filter:none;backdrop-filter:none}
+.fld:focus-within{border-color:var(--teal)}
+.fld.warn,.fld.warn:focus-within{border-color:#e5483b}
+.link-btn.primary,.sheet .link-btn.primary{background:linear-gradient(180deg,#ff9d45,var(--arrow));border-color:transparent;box-shadow:0 4px 0 var(--arrow2),0 10px 22px rgba(245,132,31,.28)}
+.big-btn.primary{background:linear-gradient(180deg,#ff9d45,var(--arrow));border-color:transparent;box-shadow:0 5px 0 var(--arrow2),0 12px 24px rgba(245,132,31,.28)}
+.sheet .link-btn{background:var(--soft);border-color:transparent;box-shadow:none}
+.seg{background:var(--panel2);border-color:var(--line)}
+.chip{background:var(--panel2);border-color:var(--line)}
+.hero{margin-top:16px}
+.cats button{background:var(--panel);border-color:var(--line);box-shadow:0 2px 0 var(--edge)}
+.cats button.on{background:var(--teal);color:#fff;border-color:transparent;box-shadow:0 2px 0 var(--sky1)}
+.catpick button.on{background:var(--teal-soft);border-color:var(--teal);color:var(--teal-ink)}
+.code{color:var(--teal-ink)}
+.cbtns button{color:var(--teal-ink);background:var(--teal-soft)}
+.txt-btn{color:var(--teal-ink)}
+.qr{box-shadow:0 0 0 1px var(--line),0 3px 0 var(--edge)}
+.pill.host{background:rgba(245,132,31,.15);color:var(--accent)}
+.hhead{margin-top:20px}
+.spin{margin-top:14px;padding:16px 12px 18px;border-radius:30px;background:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='140' height='120'><g fill='none' stroke='%23fff' stroke-opacity='.08' stroke-width='1.5'><rect x='10' y='14' width='26' height='26' rx='7' transform='rotate(-12 23 27)'/><rect x='78' y='8' width='22' height='22' rx='6' transform='rotate(10 89 19)'/><rect x='50' y='66' width='30' height='30' rx='8' transform='rotate(-6 65 81)'/></g></svg>") 0 0/140px 120px,linear-gradient(165deg,var(--haze),var(--sky1));box-shadow:0 4px 0 var(--edge),0 16px 34px rgba(10,60,55,.25);color:#fff}
+.spin .lname{color:#fff}.spin .cd{color:#FFB067}
+.pod.p2 .blk{background:linear-gradient(180deg,#2BB3A3,#0F7A71)}
+.pod .pnm{color:var(--fg)}
+.win-t{font-size:14px;opacity:.95}.win-n{font-family:var(--fun);font-weight:800;font-size:30px;line-height:1.3}
+.tabs{background:rgba(255,255,255,.94);border-color:var(--line);box-shadow:0 3px 0 var(--edge),0 12px 30px var(--gsh);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px)}
+:root[data-theme="dark"] .tabs{background:rgba(21,40,38,.94)}
+@media (prefers-color-scheme:dark){:root[data-theme="auto"] .tabs{background:rgba(21,40,38,.94)}}
+.gate{background:linear-gradient(180deg,var(--sky1) 0,var(--sky2) 160px,var(--haze) 260px,var(--sand) 380px,var(--sand2) 100%)}
+.gate-title{color:#fff}.gate-sub{color:rgba(255,255,255,.92)}
+.gate-feats{-webkit-backdrop-filter:none;backdrop-filter:none;box-shadow:0 3px 0 var(--edge)}
+.gate-feats svg{color:var(--teal)}
+.gate .steps{background:var(--panel)}
+.champ .crown{color:var(--arrow)}
+.av .on{border-color:var(--panel)}
+.avs .av{border-color:var(--panel)}
+.empty{margin-top:18px}
 </style>
 </head>
 <body>
-<div class="bg3" aria-hidden="true"><i class="st3"></i>
-<svg viewBox="0 0 400 260" preserveAspectRatio="none" style="top:20%"><path class="r1" d="M0 120 L40 92 L70 104 L120 70 L160 96 L200 78 L250 104 L300 66 L350 92 L400 80 V260 H0Z"/></svg>
-<svg viewBox="0 0 400 260" preserveAspectRatio="none" style="top:27%"><path class="r2" d="M0 110 C40 96 70 70 110 84 S180 112 220 92 S300 70 340 88 S380 100 400 92 V260 H0Z"/></svg>
-<svg viewBox="0 0 400 260" preserveAspectRatio="none" style="top:34%"><path class="r3" d="M0 96 C60 80 100 104 160 92 S260 72 320 90 S380 98 400 90 V260 H0Z"/></svg>
-<svg viewBox="0 0 400 260" preserveAspectRatio="none" style="top:42%"><path class="r4" d="M0 90 C80 74 140 96 220 86 S340 74 400 84 V260 H0Z"/></svg>
-</div>
+<div class="bg3" aria-hidden="true"></div>
 
 <div class="app">
   <!-- الرئيسية -->
@@ -466,7 +494,7 @@ body.gated .tabs{display:none}
       <span><b>لعبة جديدة</b><small>تاخذ رقم وكود سري، وأنت المضيف</small></span>
     </button>
     <button class="big-btn" id="btnJoin">
-      <span class="bi" style="background:linear-gradient(135deg,#7FA6C6,#4E7AA3)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><path d="M14 14h3v3M21 14v.01M14 21h7v-4"/></svg></span>
+      <span class="bi" style="background:linear-gradient(135deg,#2BB3A3,#0F7A71)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><path d="M14 14h3v3M21 14v.01M14 21h7v-4"/></svg></span>
       <span><b>ادخل لعبة</b><small>اكتب الكود أو امسح الباركود</small></span>
       <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg>
     </button>
@@ -571,9 +599,9 @@ body.gated .tabs{display:none}
 <div class="toast" id="toast" role="status"></div>
 <div class="net" id="net" hidden>جاري الاتصال…</div>
 
-<script src="config.js?v=1.0.0"></script>
-<script src="qr.js?v=1.0.0"></script>
-<script src="app.js?v=1.0.0"></script>
+<script src="config.js?v=1.1.0"></script>
+<script src="qr.js?v=1.1.0"></script>
+<script src="app.js?v=1.1.0"></script>
 <script src="wamd-stats.js" data-app="harf"></script>
 <script src="wamd-cfg.js" data-app="harf" defer></script>
 </body>
