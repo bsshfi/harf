@@ -229,7 +229,8 @@ async function act(env, g, b, now) {
       const w = [DB.prepare('INSERT INTO answers (game, round, player, txt) VALUES (?, ?, ?, ?) ON CONFLICT(game, round, player) DO UPDATE SET txt = excluded.txt').bind(g.id, g.round, g.pid, JSON.stringify(txt))];
       if (b.a === 'stop') {
         if (st.mode !== 'stop') return { error: 'mode' };
-        if (txt.some((x) => !norm(x))) return { error: 'incomplete' };
+        const L = norm(g.letter);
+        if (txt.some((x) => { const n = norm(x); return !n || n[0] !== L; })) return { error: 'incomplete' };
         w.push(DB.prepare('UPDATE players SET done = 1 WHERE id = ?').bind(g.pid));
         if (!g.stop_at) w.push(DB.prepare('UPDATE games SET stop_by = ?, stop_at = ?, rev = rev + 1, updated = ? WHERE id = ? AND stop_at IS NULL').bind(g.pid, now, now, g.id));
         else w.push(bumpRev());

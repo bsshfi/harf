@@ -141,7 +141,7 @@
   /* ================= الرئيسية ================= */
   function renderHome() {
     const a = S.active && hist(S.active.g);
-    $('#resumeBox').innerHTML = a ? '<button class="big-btn resume" id="btnResume"><span class="bi" style="background:linear-gradient(135deg,#4FC79A,#21875F)">' + IC.play + '</span><span><b>ارجع للعبة</b><small>#' + a.g + ' · ' + esc(a.name || '') + ' · ' + statusText(a.status) + '</small></span><svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg></button>' : '';
+    $('#resumeBox').innerHTML = a ? '<button class="big-btn resume" id="btnResume"><span class="bi" style="background:linear-gradient(135deg,#4FC79A,#21875F)">' + IC.play + '</span><span><b>ارجع للعبة</b><small><bdi>#' + a.g + '</bdi> · ' + esc(a.name || '') + ' · ' + statusText(a.status) + '</small></span><svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg></button>' : '';
     if (a) $('#btnResume').onclick = () => enterGame(S.active.g, S.active.t, S.active.me);
     // بطل البيت: أكثر واحد فاز آخر ٣٠ يوم
     const since = Date.now() - 30 * 864e5, wins = {};
@@ -524,7 +524,7 @@
     clearTimeout(G.saveT);
     if (!G.s || G.s.game.status !== 'play') return;
     const r = await api('/act', { g: G.g, t: G.t, a, round: G.s.game.round, answers: G.ans });
-    if (r.error) { if (r.error === 'incomplete') toast('كمّل كل الخانات أول'); else if (r.error !== 'closed' && a !== 'save') toast(errText(r.error)); return r; }
+    if (r.error) { if (r.error === 'incomplete') toast('كمّل كل الخانات بكلمات تبدأ بالحرف'); else if (r.error !== 'closed' && a !== 'save') toast(errText(r.error)); return r; }
     if (a !== 'save') onState(r);
     return r;
   }
@@ -535,8 +535,8 @@
     if (done) { b.disabled = true; b.textContent = 'سلّمت ✓ بانتظار الباقين'; return; }
     if (over) { b.disabled = true; b.textContent = 'خلص الوقت ⏰ نجمع الإجابات'; return; }
     if (st.mode === 'stop' && !G.s.game.stop_at) {
-      const full = G.ans.every((x) => norm(x));
-      b.disabled = !full; b.textContent = full ? 'ستوب! خلصت' : 'ستوب! (كمّل كل الخانات)';
+      const L = norm(G.s.game.letter), full = G.ans.every((x) => { const n = norm(x); return n && n[0] === L; });
+      b.disabled = !full; b.textContent = full ? 'ستوب! خلصت' : 'ستوب! (كمّل كل الخانات صح)';
     } else { b.disabled = false; b.textContent = 'خلصت، سلّم إجاباتي'; }
   }
   async function onAct(e) {
@@ -660,7 +660,7 @@
       podiumHTML(rows) +
       '<div class="gl tbl">' + rows.map((p) => '<div class="tr' + (p.rank === 1 && p.score ? ' lead' : '') + '"><span class="rk">' + p.rank + '</span><span class="who">' + av(p.name, p.color, 'sm') + '<b>' + esc(p.name) + '</b></span><span></span><span class="tot">' + p.score + '</span></div>').join('') + '</div>' +
       roundsGrid(s.rounds, rows) +
-      '<p class="wait">انحفظت في السجل: #' + gm.id + ' · ' + esc(gm.name) + '</p>' +
+      '<p class="wait">انحفظت في السجل: <bdi>#' + gm.id + '</bdi> · ' + esc(gm.name) + '</p>' +
       '<button class="link-btn primary" id="dnShare">' + IC.share + 'شارك النتيجة</button>' +
       '<div class="row2"><button class="link-btn" id="dnNew">لعبة جديدة</button><button class="link-btn" id="dnHome">الرئيسية</button></div>';
     bindTop();
