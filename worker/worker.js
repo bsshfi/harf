@@ -4,7 +4,8 @@
    - كل جهاز له مفتاح خاص (token) ما يطلع لغيره، وما أحد يشوف إجابات غيره وقت الكتابة.
    - اللعبة تنحفظ برقمها واسمها وجولاتها ونتائجها وتبقى في السجل.
    - التحديث بالسحب: الجهاز يسأل كل ثانية تقريباً، والسيرفر يرد {same:1} إذا ما تغيّر شي (قراءة صف واحد).
-   الربط المطلوب: قاعدة D1 باسم DB (wrangler.toml). الجداول تنشأ لحالها أول مرة. */
+   - /stats للوحة الإدارة admin.wamdarc.com (بنفس مفتاح الإدارة، يتحقق منه عن طريق siraj-api أو ADMIN_KEY).
+   الربط المطلوب: قاعدة D1 باسم DB، وربط SIRAJ بخادم سِراج (wrangler.toml). الجداول تنشأ لحالها أول مرة. */
 
 const ORIGINS = ['https://harf.wamdarc.com', 'https://bsshfi.github.io'];
 const MAX_PLAYERS = 10;
@@ -29,7 +30,7 @@ export default {
     const cors = {
       'Access-Control-Allow-Origin': allow,
       'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type',
+      'Access-Control-Allow-Headers': 'Content-Type,Authorization,X-Admin-Key',
       'Access-Control-Max-Age': '86400',
       'Vary': 'Origin'
     };
@@ -45,6 +46,13 @@ export default {
       const ip = req.headers.get('CF-Connecting-IP') || 'local';
 
       if (p === '' || p === '/health') return json({ ok: true, app: 'harf', service: 'harf-api', now });
+
+      /* لوحة الإدارة */
+      if (p === '/stats' && req.method === 'GET') {
+        const gate = await adminGate(req, env.DB, () => isAdmin(req, env));
+        if (gate !== 'ok') return json({ error: gate === 'locked' ? 'locked' : 'unauthorized' }, gate === 'locked' ? 429 : 401);
+        return json(await stats(env, now));
+      }
 
       /* إنشاء لعبة */
       if (p === '/create' && req.method === 'POST') {
@@ -423,6 +431,79 @@ function norm(s) {
     .replace(/[^ء-يa-z0-9]+/g, ' ').trim();
   if (x.length > 3 && x.startsWith('ال')) x = x.slice(2);
   return x.replace(/ /g, '');
+}
+
+/* ===================== لوحة الإدارة ===================== */
+async function stats(env, now) {
+  const DAY = 864e5, today0 = Date.parse(new Date(now + 3 * 3600e3).toISOString().slice(0, 10) + 'T00:00:00+03:00');
+  const one = (sql, ...a) => env.DB.prepare(sql).bind(...a).first();
+  const [g, p, live, online, rounds, recent, days] = await Promise.all([
+    one("SELECT COUNT(*) total, SUM(created >= ?) today, SUM(created >= ?) week, SUM(status = 'done') done FROM games", today0, now - 7 * DAY),
+    one('SELECT COUNT(*) total, SUM(joined >= ?) today FROM players WHERE gone <> 2', today0),
+    one("SELECT COUNT(*) n FROM games WHERE status <> 'done' AND updated > ?", now - 10 * 60e3),
+    one('SELECT COUNT(*) n FROM players WHERE gone = 0 AND seen > ?', now - ONLINE_MS),
+    one('SELECT COUNT(*) n FROM rounds'),
+    env.DB.prepare('SELECT g.id, g.name, g.status, g.round, g.created, g.updated, (SELECT COUNT(*) FROM players p WHERE p.game = g.id AND p.gone <> 2) players FROM games g ORDER BY g.id DESC LIMIT 12').all(),
+    env.DB.prepare("SELECT day, n FROM daily WHERE k = 'games' ORDER BY day DESC LIMIT 30").all()
+  ]);
+  const total = g.total || 0, players = p.total || 0;
+  return {
+    subs: 0, games: total, gamesToday: g.today || 0, gamesWeek: g.week || 0, finished: g.done || 0, liveGames: live.n || 0,
+    players, playersToday: p.today || 0, online: online.n || 0, rounds: rounds.n || 0, avgPlayers: total ? Math.round(players / total * 10) / 10 : 0,
+    recent: recent.results || [], daily: days.results || []
+  };
+}
+
+/* مفتاح الإدارة: ADMIN_KEY هنا إن وُجد، وإلا نتأكد منه عند siraj-api (نفس المفتاح لكل خوادم ومض آرك) */
+const normKey = (k) => String(k || '').replace(/[٠-٩]/g, (x) => '٠١٢٣٤٥٦٧٨٩'.indexOf(x)).replace(/[۰-۹]/g, (x) => '۰۱۲۳۴۵۶۷۸۹'.indexOf(x)).replace(/\s+/g, '');
+const adminOk = new Map();
+async function isAdmin(req, env) {
+  let k = req.headers.get('X-Admin-Key') || (req.headers.get('Authorization') || '').replace(/^Bearer\s+/i, '');
+  try { k = decodeURIComponent(k); } catch (e) {}
+  const a = normKey(k);
+  if (!a) return false;
+  if (env.ADMIN_KEY) {
+    const b = normKey(env.ADMIN_KEY);
+    if (a.length !== b.length) return false;
+    let r = 0; for (let i = 0; i < a.length; i++) r |= a.charCodeAt(i) ^ b.charCodeAt(i);
+    return r === 0;
+  }
+  const h = await sha('adm:' + a), hit = adminOk.get(h);
+  if (hit && hit > Date.now()) return true;
+  try {
+    // Cloudflare يمنع خادم يكلّم خادم ثاني على workers.dev بـ fetch العادي، فنستخدم الربط المباشر SIRAJ
+    const r = env.SIRAJ ? await env.SIRAJ.fetch('https://siraj-api/stats', { headers: { Authorization: 'Bearer ' + encodeURIComponent(a) } }) : null;
+    if (r && r.ok) { adminOk.set(h, Date.now() + 10 * 60e3); return true; }
+  } catch (e) {}
+  return false;
+}
+/* قفل مؤقت بعد محاولات خاطئة كثيرة (مثل نَبْض) */
+const AF = { ipMax: 20, ipLock: 30 * 60e3, allMax: 100, allLock: 15 * 60e3, win: 36e5 };
+async function adminGate(req, db, check) {
+  const now = Date.now();
+  const raw = (req.headers.get('X-Admin-Key') || req.headers.get('Authorization') || '').replace(/^Bearer\s+/i, '').trim();
+  if (!raw) return 'bad';
+  const ip = (await sha('af:' + (req.headers.get('CF-Connecting-IP') || 'local'))).slice(0, 24);
+  await db.prepare('CREATE TABLE IF NOT EXISTS afail (ip TEXT PRIMARY KEY, n INTEGER, last INTEGER, lock INTEGER)').run();
+  const rows = (await db.prepare("SELECT ip, n, last, lock FROM afail WHERE ip IN (?, '*')").bind(ip).all()).results || [];
+  if (rows.some((r) => r.lock > now)) return 'locked';
+  if (await check()) {
+    if (rows.some((r) => r.ip === ip)) await db.prepare('DELETE FROM afail WHERE ip = ?').bind(ip).run();
+    return 'ok';
+  }
+  const st = [];
+  for (const [k, max, lock] of [[ip, AF.ipMax, AF.ipLock], ['*', AF.allMax, AF.allLock]]) {
+    const r = rows.find((x) => x.ip === k);
+    const n = (r && r.last > now - AF.win ? r.n : 0) + 1;
+    st.push(db.prepare('INSERT INTO afail (ip, n, last, lock) VALUES (?, ?, ?, ?) ON CONFLICT(ip) DO UPDATE SET n = excluded.n, last = excluded.last, lock = excluded.lock')
+      .bind(k, n >= max ? 0 : n, now, n >= max ? now + lock : 0));
+  }
+  await db.batch(st);
+  return 'bad';
+}
+async function sha(s) {
+  const h = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s));
+  return [...new Uint8Array(h)].map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 
 /* ===================== أدوات ===================== */

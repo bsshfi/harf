@@ -11,6 +11,11 @@ binding = "DB"
 database_name = "harf"
 database_id = "320de743-f510-4b95-b47b-b2fe68c395ac"
 
+# ربط مباشر بخادم سِراج للتحقق من مفتاح لوحة الإدارة (fetch العادي بين خوادم workers.dev ممنوع)
+[[services]]
+binding = "SIRAJ"
+service = "siraj-api"
+
 # تشغيل السيرفر قرب قاعدة البيانات = ردود أسرع
 [placement]
 mode = "smart"
