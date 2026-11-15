@@ -469,6 +469,28 @@ body.gated .tabs{display:none}
 .av .on{border-color:var(--panel)}
 .avs .av{border-color:var(--panel)}
 .empty{margin-top:18px}
+/* ===== حَرف 1.2: ملفي وقروب اللعب ===== */
+.grp{margin-top:12px;padding:6px;overflow:hidden}
+.grp-h{display:flex;align-items:center;gap:12px;width:100%;padding:10px;text-align:start;border-radius:18px}
+.grp-h .bi,.big-btn .bi{flex:none}
+.grp-h .bi{width:44px;height:44px;border-radius:15px;display:grid;place-items:center;color:#fff}
+.grp-h .bi svg{width:24px;height:24px}
+.grp-h .gn{flex:1;min-width:0}
+.grp-h .gn b{display:block;font-size:17px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.grp-h .gn small{font-size:12.5px;color:var(--dim)}
+.live{display:flex;align-items:center;gap:10px;margin:4px 6px 6px;padding:10px 12px;border-radius:16px;background:var(--teal-soft)}
+.live .lv{flex:1;min-width:0}
+.live .lv b{display:block;font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.live .lv small{font-size:12px;color:var(--dim)}
+.dotlive{width:10px;height:10px;border-radius:50%;background:#2fbf71;flex:none;box-shadow:0 0 0 0 rgba(47,191,113,.5);animation:livep 1.6s infinite}
+@keyframes livep{70%{box-shadow:0 0 0 8px rgba(47,191,113,0)}100%{box-shadow:0 0 0 0 rgba(47,191,113,0)}}
+.lvbtn{flex:none;background:linear-gradient(180deg,#ff9d45,var(--arrow));color:#fff;font-weight:700;font-size:14px;border-radius:13px;padding:9px 16px;box-shadow:0 3px 0 var(--arrow2)}
+.bigcode{font-family:var(--num);font-weight:800;font-size:44px;letter-spacing:.06em;text-align:center;color:var(--teal-ink);background:var(--teal-soft);border-radius:22px;padding:14px 10px;margin:4px 0 12px;-webkit-user-select:all;user-select:all}
+.bi-big{width:64px;height:64px;border-radius:20px;display:grid;place-items:center;margin:0 auto;color:#fff;background:linear-gradient(135deg,#2BB3A3,#0F7A71);box-shadow:0 4px 0 var(--edge)}
+.or{display:flex;align-items:center;gap:10px;margin:18px 4px 2px;color:var(--faint);font-size:13px}
+.or::before,.or::after{content:'';flex:1;height:1px;background:var(--sep)}
+.badge{background:var(--arrow);color:#fff;font-size:12px;font-weight:700;border-radius:999px;padding:3px 10px}
+.set .val{display:flex;align-items:center;gap:6px;max-width:55%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 </style>
 </head>
 <body>
@@ -503,6 +525,8 @@ body.gated .tabs{display:none}
       <span><b>العب على ورقة</b><small>بدون نت · يطلع الحرف ويحسب النقاط</small></span>
       <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg>
     </button>
+    <div id="groupBox"></div>
+    <div id="linkBox"></div>
     <div id="champBox"></div>
   </section>
 
@@ -524,6 +548,21 @@ body.gated .tabs{display:none}
       <div class="set">
         <label><span class="lbl">اسمي</span><input type="text" id="setName" maxlength="20" placeholder="اكتب اسمك" autocomplete="nickname"></label>
         <div><span class="lbl">لوني</span><span class="colors" id="setColor"></span></div>
+      </div>
+    </div>
+    <div class="set-group">
+      <h3>ملفي</h3>
+      <div class="set">
+        <button id="setCode"><span class="lbl">رمز ملفي<small>يرجّع كل ألعابك على أي جهاز</small></span><span class="val" id="codeVal"></span></button>
+        <button id="setRestore"><span class="lbl">استرجاع ملفي<small>عندك رمز من جهاز ثاني؟</small></span><span class="val"><svg class="chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg></span></button>
+        <button id="setGroup"><span class="lbl">قروب اللعب</span><span class="val" id="grpVal"></span></button>
+      </div>
+    </div>
+    <div class="set-group">
+      <h3>النسخة الاحتياطية</h3>
+      <div class="set">
+        <button id="setBackup"><span class="lbl">حفظ نسخة احتياطية<small>ملف فيه كل سجلّك ورمز ملفك</small></span><span class="val" id="bakVal"></span></button>
+        <button id="setImport"><span class="lbl">استرجاع من نسخة</span><span class="val"><svg class="chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg></span></button>
       </div>
     </div>
     <div class="set-group">
@@ -599,9 +638,9 @@ body.gated .tabs{display:none}
 <div class="toast" id="toast" role="status"></div>
 <div class="net" id="net" hidden>جاري الاتصال…</div>
 
-<script src="config.js?v=1.1.0"></script>
-<script src="qr.js?v=1.1.0"></script>
-<script src="app.js?v=1.1.0"></script>
+<script src="config.js?v=1.2.0"></script>
+<script src="qr.js?v=1.2.0"></script>
+<script src="app.js?v=1.2.0"></script>
 <script src="wamd-stats.js" data-app="harf"></script>
 <script src="wamd-cfg.js" data-app="harf" defer></script>
 </body>

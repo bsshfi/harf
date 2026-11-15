@@ -4,6 +4,7 @@
    - كل جهاز له مفتاح خاص (token) ما يطلع لغيره، وما أحد يشوف إجابات غيره وقت الكتابة.
    - اللعبة تنحفظ برقمها واسمها وجولاتها ونتائجها وتبقى في السجل.
    - التحديث بالسحب: الجهاز يسأل كل ثانية تقريباً، والسيرفر يرد {same:1} إذا ما تغيّر شي (قراءة صف واحد).
+   - «ملفي»: كل جهاز له ملف (رمز ٨ أرقام للاسترجاع) تنربط فيه ألعابه، و«قروب اللعب» يجمع العائلة: سجل مشترك وألعاب تطلع لهم بدون كود.
    - /stats للوحة الإدارة admin.wamdarc.com (بنفس مفتاح الإدارة، يتحقق منه عن طريق siraj-api أو ADMIN_KEY).
    الربط المطلوب: قاعدة D1 باسم DB، وربط SIRAJ بخادم سِراج (wrangler.toml). الجداول تنشأ لحالها أول مرة. */
 
@@ -21,6 +22,7 @@ const HOST_IDLE = 60e3;       // المضيف غايب أكثر من دقيقة 
 const ONLINE_MS = 12e3;
 const SEEN_EVERY = 10e3;
 const IDLE_GAME = 12 * 3600e3; // الكود ينتهي بعد ١٢ ساعة بدون نشاط
+const LIVE_MS = 3 * 3600e3;    // لعبة القروب تطلع «شغالة» للأفراد إذا تحركت آخر ٣ ساعات
 
 export default {
   async fetch(req, env) {
@@ -70,10 +72,13 @@ export default {
         if (!code) return json({ error: 'busy' }, 503);
         const pid = rnd(10), tok = rnd(24);
         const name = clip(b.name, 40);
-        const ins = await env.DB.prepare("INSERT INTO games (code, name, host, status, settings, created, updated) VALUES (?, ?, ?, 'lobby', ?, ?, ?)")
-          .bind(code, name || 'لعبة', pid, JSON.stringify(st), now, now).run();
+        const prof = await profByTok(env, b.ptok);
+        const grp = prof && prof.grp && b.group ? prof.grp : null;
+        const ins = await env.DB.prepare("INSERT INTO games (code, name, host, status, settings, created, updated, grp) VALUES (?, ?, ?, 'lobby', ?, ?, ?, ?)")
+          .bind(code, name || 'لعبة', pid, JSON.stringify(st), now, now, grp).run();
         const gid = ins.meta.last_row_id;
-        const w = [env.DB.prepare('INSERT INTO players (id, game, token, name, color, joined, seen, ord) VALUES (?, ?, ?, ?, ?, ?, ?, 0)').bind(pid, gid, tok, me.name, me.color, now, now)];
+        const w = [env.DB.prepare('INSERT INTO players (id, game, token, name, color, joined, seen, ord, prof) VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?)').bind(pid, gid, tok, me.name, me.color, now, now, prof ? prof.id : null)];
+        if (prof) w.push(env.DB.prepare('INSERT OR IGNORE INTO pgames (prof, game, player, token) VALUES (?, ?, ?, ?)').bind(prof.id, gid, pid, tok));
         if (!name) w.push(env.DB.prepare('UPDATE games SET name = ? WHERE id = ?').bind('لعبة ' + gid, gid));
         await env.DB.batch(w);
         await daily(env, now, 'games');
@@ -95,10 +100,13 @@ export default {
         const cnt = await env.DB.prepare('SELECT COUNT(*) n, COALESCE(MAX(ord), 0) o FROM players WHERE game = ? AND gone = 0').bind(g0.id).first();
         if (cnt.n >= MAX_PLAYERS) return json({ error: 'full' }, 403);
         const pid = rnd(10), tok = rnd(24);
-        await env.DB.batch([
-          env.DB.prepare('INSERT INTO players (id, game, token, name, color, joined, seen, ord) VALUES (?, ?, ?, ?, ?, ?, ?, ?)').bind(pid, g0.id, tok, me.name, me.color, now, now, cnt.o + 1),
+        const prof = await profByTok(env, b.ptok);
+        const w = [
+          env.DB.prepare('INSERT INTO players (id, game, token, name, color, joined, seen, ord, prof) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)').bind(pid, g0.id, tok, me.name, me.color, now, now, cnt.o + 1, prof ? prof.id : null),
           env.DB.prepare('UPDATE games SET rev = rev + 1, updated = ? WHERE id = ?').bind(now, g0.id)
-        ]);
+        ];
+        if (prof) w.push(env.DB.prepare('INSERT OR IGNORE INTO pgames (prof, game, player, token) VALUES (?, ?, ?, ?)').bind(prof.id, g0.id, pid, tok));
+        await env.DB.batch(w);
         const g = await auth(env, g0.id, tok);
         return json({ ok: 1, g: g0.id, t: tok, me: pid, state: await fullState(env, g, now) });
       }
@@ -126,12 +134,118 @@ export default {
 
       /* تفاصيل لعبة للسجل (كل الجولات والإجابات) */
       if (p === '/game' && req.method === 'GET') {
-        const g = await auth(env, +q.get('g') || 0, q.get('t') || '');
+        const gid = +q.get('g') || 0;
+        let g = q.get('t') ? await auth(env, gid, q.get('t')) : null;
+        if (!g && q.get('ptok')) {
+          const prof = await profByTok(env, q.get('ptok'));
+          const row = prof && await env.DB.prepare('SELECT g.*, (SELECT player FROM pgames WHERE prof = ?1 AND game = g.id LIMIT 1) AS pid FROM games g WHERE g.id = ?2').bind(prof.id, gid).first();
+          if (row && (row.pid || (row.grp && row.grp === prof.grp))) { g = row; g.pid = row.pid || ''; g.pgone = 0; }
+        }
         if (!g) return json({ error: 'auth' }, 401);
         const st = await fullState(env, g, now);
         const rows = (await env.DB.prepare('SELECT round, player, txt, res FROM answers WHERE game = ? ORDER BY round').bind(g.id).all()).results || [];
         st.answers = rows.map((r) => ({ round: r.round, player: r.player, txt: parse(r.txt, []), res: parse(r.res, null) }));
         return json(st);
+      }
+
+      /* ===== ملفي ===== */
+      if (p === '/me') {
+        if (req.method === 'GET') {
+          const prof = await profByTok(env, q.get('tok'));
+          if (!prof) return json({ error: 'auth' }, 401);
+          return json(await meData(env, prof, now));
+        }
+        const b = await body(req);
+        if (b.a === 'new') {
+          if (!(await bump(env, 'p:' + ip, 30, 3600e3, now))) return json({ error: 'wait' }, 429);
+          const me = cleanPlayer({ name: b.name, color: b.color });
+          const code = await newCode(env), tok = rnd(32);
+          const ins = await env.DB.prepare('INSERT INTO profiles (code, tok, name, color, created, seen) VALUES (?, ?, ?, ?, ?, ?)').bind(code, tok, me.name, me.color, now, now).run();
+          return json({ ok: 1, id: ins.meta.last_row_id, tok, code });
+        }
+        let prof = await profByTok(env, b.tok);
+        if (!prof) return json({ error: 'auth' }, 401);
+        if (b.a === 'me') {
+          const me = cleanPlayer({ name: b.name, color: b.color });
+          await env.DB.prepare('UPDATE profiles SET name = ?, color = ? WHERE id = ?').bind(me.name || prof.name, me.color, prof.id).run();
+        }
+        if (b.a === 'sync') await syncProfile(env, prof, b, now);
+        if (b.a === 'paperdel') await env.DB.prepare('DELETE FROM ppaper WHERE prof = ? AND pid = ?').bind(prof.id, clip(b.pid, 40)).run();
+        if (b.a === 'hide') await env.DB.prepare('DELETE FROM pgames WHERE prof = ? AND game = ?').bind(prof.id, +b.g || 0).run();
+        prof = await profByTok(env, b.tok);
+        return json(await meData(env, prof, now));
+      }
+
+      /* استرجاع الملف برمزه (ويندمج فيه ملف هالجهاز) */
+      if (p === '/restore' && req.method === 'POST') {
+        const b = await body(req);
+        if (await blocked(env, 'r:' + ip, 12, now)) return json({ error: 'wait' }, 429);
+        const code = digits(b.code);
+        const target = code.length === 8 ? await env.DB.prepare('SELECT * FROM profiles WHERE code = ?').bind(code).first() : null;
+        if (!target) {
+          await bump(env, 'r:' + ip, 12, 600e3, now);
+          const isGroup = code.length === 8 && await env.DB.prepare('SELECT id FROM pgroups WHERE code = ?').bind(code).first();
+          return json({ error: isGroup ? 'isgroup' : 'nocode' }, 404);
+        }
+        const cur = await profByTok(env, b.tok);
+        if (cur && cur.id !== target.id) await mergeProfiles(env, cur, target);
+        const fresh = await env.DB.prepare('SELECT * FROM profiles WHERE id = ?').bind(target.id).first();
+        await tagGroupGames(env, fresh.grp);
+        return json(Object.assign({ ok: 1, tok: target.tok }, await meData(env, fresh, now)));
+      }
+
+      /* ===== قروب اللعب ===== */
+      if (p === '/group' && req.method === 'POST') {
+        const b = await body(req);
+        let prof = await profByTok(env, b.tok);
+        if (!prof) return json({ error: 'auth' }, 401);
+        const DB = env.DB;
+        if (b.a === 'create') {
+          const name = clip(b.name, 30);
+          if (!name) return json({ error: 'gname' }, 400);
+          if (!(await bump(env, 'gc:' + ip, 10, 3600e3, now))) return json({ error: 'wait' }, 429);
+          const code = await newCode(env);
+          const ins = await DB.prepare('INSERT INTO pgroups (code, name, owner, created) VALUES (?, ?, ?, ?)').bind(code, name, prof.id, now).run();
+          await DB.prepare('UPDATE profiles SET grp = ? WHERE id = ?').bind(ins.meta.last_row_id, prof.id).run();
+        } else if (b.a === 'join') {
+          if (await blocked(env, 'r:' + ip, 12, now)) return json({ error: 'wait' }, 429);
+          const code = digits(b.code);
+          const gr = code.length === 8 ? await DB.prepare('SELECT * FROM pgroups WHERE code = ?').bind(code).first() : null;
+          if (!gr) {
+            await bump(env, 'r:' + ip, 12, 600e3, now);
+            const isProf = code.length === 8 && await DB.prepare('SELECT id FROM profiles WHERE code = ?').bind(code).first();
+            return json({ error: isProf ? 'isprofile' : 'nogroup' }, 404);
+          }
+          if (b.check) return json({ ok: 1, name: gr.name, members: (await DB.prepare('SELECT COUNT(*) n FROM profiles WHERE grp = ?').bind(gr.id).first()).n });
+          await DB.prepare('UPDATE profiles SET grp = ? WHERE id = ?').bind(gr.id, prof.id).run();
+          await tagGroupGames(env, gr.id);
+        } else if (b.a === 'leave') {
+          const gid = prof.grp;
+          await DB.prepare('UPDATE profiles SET grp = NULL WHERE id = ?').bind(prof.id).run();
+          if (gid) {   // صاحب القروب طلع: تنتقل لأقدم واحد باقي
+            const gr = await DB.prepare('SELECT owner FROM pgroups WHERE id = ?').bind(gid).first();
+            if (gr && gr.owner === prof.id) {
+              const nx = await DB.prepare('SELECT id FROM profiles WHERE grp = ? ORDER BY created LIMIT 1').bind(gid).first();
+              await DB.prepare('UPDATE pgroups SET owner = ? WHERE id = ?').bind(nx ? nx.id : null, gid).run();
+            }
+          }
+        } else if (b.a === 'kick' || b.a === 'rename' || b.a === 'newcode') {
+          const gr = prof.grp && await DB.prepare('SELECT * FROM pgroups WHERE id = ?').bind(prof.grp).first();
+          if (!gr || gr.owner !== prof.id) return json({ error: 'owner' }, 403);
+          if (b.a === 'kick' && +b.prof !== prof.id) await DB.prepare('UPDATE profiles SET grp = NULL WHERE id = ? AND grp = ?').bind(+b.prof || 0, gr.id).run();
+          if (b.a === 'rename') { const name = clip(b.name, 30); if (name) await DB.prepare('UPDATE pgroups SET name = ? WHERE id = ?').bind(name, gr.id).run(); }
+          if (b.a === 'newcode') await DB.prepare('UPDATE pgroups SET code = ? WHERE id = ?').bind(await newCode(env), gr.id).run();
+        } else return json({ error: 'action' }, 400);
+        prof = await profByTok(env, b.tok);
+        return json(await meData(env, prof, now));
+      }
+
+      /* ألعاب القروب الشغالة (الرئيسية تسأل عنها كل شوي) */
+      if (p === '/live' && req.method === 'GET') {
+        const prof = await profByTok(env, q.get('tok'));
+        if (!prof) return json({ error: 'auth' }, 401);
+        if (now - (prof.seen || 0) > 60e3) await env.DB.prepare('UPDATE profiles SET seen = ? WHERE id = ?').bind(now, prof.id).run();
+        return json({ now, live: await liveGames(env, prof, now) });
       }
 
       /* الأفعال */
@@ -345,6 +459,124 @@ async function finishGame(env, g, now) {
   const results = { players, rounds: rounds.n, winners: players.filter((p) => p.rank === 1 && p.score > 0).map((p) => p.name) };
   await env.DB.prepare("UPDATE games SET status = 'done', finished = ?, results = ?, rev = rev + 1, updated = ? WHERE id = ? AND status <> 'done'")
     .bind(now, JSON.stringify(results), now, g.id).run();
+  await env.DB.prepare('UPDATE games SET grp = (SELECT f.grp FROM players p JOIN profiles f ON f.id = p.prof WHERE p.game = ?1 AND f.grp IS NOT NULL GROUP BY f.grp HAVING COUNT(DISTINCT f.id) >= 2 LIMIT 1) WHERE id = ?1 AND grp IS NULL').bind(g.id).run();
+}
+
+/* ===================== ملفي وقروب اللعب ===================== */
+async function profByTok(env, tok) {
+  tok = String(tok || '');
+  if (tok.length < 20) return null;
+  return env.DB.prepare('SELECT * FROM profiles WHERE tok = ?').bind(tok).first();
+}
+const digits = (s) => String(s || '').replace(/[٠-٩]/g, (d) => '٠١٢٣٤٥٦٧٨٩'.indexOf(d)).replace(/[۰-۹]/g, (d) => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d)).replace(/\D/g, '');
+async function newCode(env) {   // ٨ أرقام، ما تتكرر بين الملفات والقروبات
+  for (let i = 0; i < 20; i++) {
+    const c = String(10000000 + rndInt(90000000));
+    const a = await env.DB.prepare('SELECT (SELECT COUNT(*) FROM profiles WHERE code = ?1) + (SELECT COUNT(*) FROM pgroups WHERE code = ?1) n').bind(c).first();
+    if (!a.n) return c;
+  }
+  throw new Error('code');
+}
+/* يرفع الجهاز ألعابه القديمة (بمفتاح اللاعب كإثبات) وألعاب الورقة */
+async function syncProfile(env, prof, b, now) {
+  const DB = env.DB, w = [];
+  const games = (Array.isArray(b.games) ? b.games : []).slice(0, 300);
+  for (const x of games) {
+    const r = await DB.prepare('SELECT id FROM players WHERE game = ? AND token = ?').bind(+x.g || 0, String(x.t || '')).first();
+    if (!r) continue;
+    w.push(DB.prepare('INSERT OR IGNORE INTO pgames (prof, game, player, token) VALUES (?, ?, ?, ?)').bind(prof.id, +x.g, r.id, String(x.t)));
+    w.push(DB.prepare('UPDATE players SET prof = ? WHERE id = ? AND prof IS NULL').bind(prof.id, r.id));
+  }
+  for (const x of (Array.isArray(b.paper) ? b.paper : []).slice(0, 300)) {
+    const pid = clip(x.pid, 40), data = String(x.data || '');
+    if (!pid || data.length > 20000) continue;
+    w.push(DB.prepare('INSERT INTO ppaper (prof, pid, data, updated) VALUES (?, ?, ?, ?) ON CONFLICT(prof, pid) DO UPDATE SET data = excluded.data, updated = excluded.updated').bind(prof.id, pid, data, now));
+  }
+  const me = cleanPlayer({ name: b.name, color: b.color });
+  w.push(DB.prepare('UPDATE profiles SET seen = ?, name = COALESCE(NULLIF(?, \'\'), name), color = ? WHERE id = ?').bind(now, me.name, me.color, prof.id));
+  for (let i = 0; i < w.length; i += 90) await DB.batch(w.slice(i, i + 90));
+  if (prof.grp) await tagGroupGames(env, prof.grp);
+}
+/* استرجاع: ملف هالجهاز يندمج في الملف اللي رمزه انكتب، والقديم ينحذف */
+async function mergeProfiles(env, from, to) {
+  const DB = env.DB;
+  await DB.batch([
+    DB.prepare('INSERT OR IGNORE INTO pgames (prof, game, player, token) SELECT ?, game, player, token FROM pgames WHERE prof = ?').bind(to.id, from.id),
+    DB.prepare('DELETE FROM pgames WHERE prof = ?').bind(from.id),
+    DB.prepare('INSERT OR IGNORE INTO ppaper (prof, pid, data, updated) SELECT ?, pid, data, updated FROM ppaper WHERE prof = ?').bind(to.id, from.id),
+    DB.prepare('DELETE FROM ppaper WHERE prof = ?').bind(from.id),
+    DB.prepare('UPDATE players SET prof = ? WHERE prof = ?').bind(to.id, from.id),
+    DB.prepare('UPDATE profiles SET grp = COALESCE(grp, ?) WHERE id = ?').bind(from.grp, to.id),
+    DB.prepare('UPDATE pgroups SET owner = ? WHERE owner = ?').bind(to.id, from.id),
+    DB.prepare('DELETE FROM profiles WHERE id = ?').bind(from.id)
+  ]);
+}
+/* الألعاب اللي لعبها اثنين أو أكثر من أفراد القروب تنضاف لسجله */
+async function tagGroupGames(env, grp) {
+  if (!grp) return;
+  await env.DB.prepare('UPDATE games SET grp = ?1 WHERE grp IS NULL AND id IN (SELECT p.game FROM players p JOIN profiles f ON f.id = p.prof WHERE f.grp = ?1 GROUP BY p.game HAVING COUNT(DISTINCT f.id) >= 2)').bind(grp).run();
+}
+async function liveGames(env, prof, now) {
+  if (!prof.grp) return [];
+  const rows = (await env.DB.prepare("SELECT g.id, g.name, g.code, g.status, g.round, g.settings, g.locked, (SELECT COUNT(*) FROM players p WHERE p.game = g.id AND p.gone = 0) players, (SELECT player FROM pgames WHERE prof = ?1 AND game = g.id LIMIT 1) mine, (SELECT name FROM players p WHERE p.id = g.host) hostname FROM games g WHERE g.grp = ?2 AND g.status <> 'done' AND g.updated > ?3 ORDER BY g.id DESC LIMIT 5")
+    .bind(prof.id, prof.grp, now - LIVE_MS).all()).results || [];
+  return rows.map((r) => ({ id: r.id, name: r.name, code: r.code, status: r.status, round: r.round, rounds: parse(r.settings, {}).rounds, players: r.players, mine: r.mine || null, host: r.hostname, locked: !!r.locked }));
+}
+/* كل بيانات «ملفي»: ألعابي وألعاب القروب والورقة والقروب نفسه */
+async function meData(env, prof, now) {
+  const DB = env.DB;
+  const sel = 'FROM games g WHERE g.id IN (SELECT game FROM pgames WHERE prof = ?1) OR (?2 IS NOT NULL AND g.grp = ?2)';
+  let rows = (await DB.prepare('SELECT g.id, g.name, g.status, g.round, g.letter, g.created, g.updated, g.finished, g.results, g.settings, g.grp, g.host, g.code, g.used ' + sel + ' ORDER BY g.id DESC LIMIT 300').bind(prof.id, prof.grp).all()).results || [];
+  // ألعاب وقفت أكثر من ١٢ ساعة بدون ما تكمل: تنقفل وتنحسب نتيجتها على الجولات اللي خلصت
+  const idle = rows.filter((r) => r.status !== 'done' && (r.updated || 0) < now - IDLE_GAME).slice(0, 10);
+  for (const r of idle) {
+    const full = await DB.prepare('SELECT *, NULL AS pid FROM games WHERE id = ?').bind(r.id).first();
+    if (full.status === 'review') await finalizeRound(env, full, parse(full.settings, {}), now);
+    await finishGame(env, await DB.prepare('SELECT * FROM games WHERE id = ?').bind(r.id).first(), now);
+  }
+  if (idle.length) rows = (await DB.prepare('SELECT g.id, g.name, g.status, g.round, g.letter, g.created, g.updated, g.finished, g.results, g.settings, g.grp, g.host, g.code, g.used ' + sel + ' ORDER BY g.id DESC LIMIT 300').bind(prof.id, prof.grp).all()).results || [];
+  const [links, pls, paper] = await Promise.all([
+    DB.prepare('SELECT game, player, token FROM pgames WHERE prof = ?').bind(prof.id).all(),
+    DB.prepare('SELECT p.game, p.id, p.name, p.color, p.score, p.prof FROM players p WHERE p.gone <> 2 AND p.game IN (SELECT g.id ' + sel + ')').bind(prof.id, prof.grp).all(),
+    DB.prepare('SELECT pid, data FROM ppaper WHERE prof = ? ORDER BY updated DESC LIMIT 300').bind(prof.id).all()
+  ]);
+  const lk = {}; for (const l of links.results || []) lk[l.game] = l;
+  const pg = {}; for (const p of pls.results || []) (pg[p.game] = pg[p.game] || []).push({ id: p.id, name: p.name, color: p.color, score: p.score, prof: p.prof });
+  const games = rows.map((r) => {
+    const res = parse(r.results, null), st = parse(r.settings, {});
+    return {
+      g: r.id, t: lk[r.id] ? lk[r.id].token : null, me: lk[r.id] ? lk[r.id].player : null, name: r.name, status: r.status, round: r.round,
+      rounds: res ? res.rounds : r.round, created: r.created, finished: r.finished, updated: r.updated, grp: r.grp, letters: r.used || '',
+      host: !!(lk[r.id] && lk[r.id].player === r.host), winners: res ? res.winners : [], settings: st, code: r.status === 'done' ? null : r.code,
+      players: pg[r.id] || []
+    };
+  });
+  let group = null;
+  if (prof.grp) {
+    const gr = await DB.prepare('SELECT * FROM pgroups WHERE id = ?').bind(prof.grp).first();
+    const mem = (await DB.prepare('SELECT id, name, color, seen FROM profiles WHERE grp = ? ORDER BY created').bind(prof.grp).all()).results || [];
+    if (gr) {
+      // بطل القروب: عدد مرات الفوز لكل فرد في ألعاب القروب اللي كملت
+      const champ = {};
+      for (const m of mem) champ[m.id] = { prof: m.id, name: m.name, color: m.color, wins: 0, games: 0, points: 0 };
+      for (const gm of games) {
+        if (gm.grp !== gr.id || gm.status !== 'done') continue;
+        const top = Math.max(0, ...gm.players.map((x) => x.score));
+        const seen = new Set();
+        for (const pl of gm.players) {
+          const c = champ[pl.prof]; if (!c || seen.has(pl.prof)) continue;
+          seen.add(pl.prof); c.games++; c.points += pl.score; if (top > 0 && pl.score === top) c.wins++;
+        }
+      }
+      group = { id: gr.id, name: gr.name, code: gr.code, owner: gr.owner === prof.id, created: gr.created,
+        members: mem.map((m) => ({ id: m.id, name: m.name, color: m.color, me: m.id === prof.id, on: now - (m.seen || 0) < 5 * 60e3, owner: m.id === gr.owner })),
+        champ: Object.values(champ).sort((a, b) => b.wins - a.wins || b.points - a.points) };
+    }
+  }
+  return {
+    now, profile: { id: prof.id, code: prof.code, name: prof.name, color: prof.color }, group, games,
+    paper: (paper.results || []).map((x) => ({ pid: x.pid, data: x.data })), live: await liveGames(env, prof, now)
+  };
 }
 
 /* ===================== الحالة الكاملة ===================== */
@@ -437,20 +669,22 @@ function norm(s) {
 async function stats(env, now) {
   const DAY = 864e5, today0 = Date.parse(new Date(now + 3 * 3600e3).toISOString().slice(0, 10) + 'T00:00:00+03:00');
   const one = (sql, ...a) => env.DB.prepare(sql).bind(...a).first();
-  const [g, p, live, online, rounds, recent, days] = await Promise.all([
+  const [g, p, live, online, rounds, recent, days, pr] = await Promise.all([
     one("SELECT COUNT(*) total, SUM(created >= ?) today, SUM(created >= ?) week, SUM(status = 'done') done FROM games", today0, now - 7 * DAY),
     one('SELECT COUNT(*) total, SUM(joined >= ?) today FROM players WHERE gone <> 2', today0),
     one("SELECT COUNT(*) n FROM games WHERE status <> 'done' AND updated > ?", now - 10 * 60e3),
     one('SELECT COUNT(*) n FROM players WHERE gone = 0 AND seen > ?', now - ONLINE_MS),
     one('SELECT COUNT(*) n FROM rounds'),
     env.DB.prepare('SELECT g.id, g.name, g.status, g.round, g.created, g.updated, (SELECT COUNT(*) FROM players p WHERE p.game = g.id AND p.gone <> 2) players FROM games g ORDER BY g.id DESC LIMIT 12').all(),
-    env.DB.prepare("SELECT day, n FROM daily WHERE k = 'games' ORDER BY day DESC LIMIT 30").all()
+    env.DB.prepare("SELECT day, n FROM daily WHERE k = 'games' ORDER BY day DESC LIMIT 30").all(),
+    one('SELECT (SELECT COUNT(*) FROM profiles) profiles, (SELECT COUNT(*) FROM pgroups) groups, (SELECT COUNT(*) FROM profiles WHERE grp IS NOT NULL) inGroups, (SELECT COUNT(*) FROM ppaper) paper')
   ]);
   const total = g.total || 0, players = p.total || 0;
   return {
     subs: 0, games: total, gamesToday: g.today || 0, gamesWeek: g.week || 0, finished: g.done || 0, liveGames: live.n || 0,
     players, playersToday: p.today || 0, online: online.n || 0, rounds: rounds.n || 0, avgPlayers: total ? Math.round(players / total * 10) / 10 : 0,
-    recent: recent.results || [], daily: days.results || []
+    recent: recent.results || [], daily: days.results || [],
+    profiles: pr.profiles || 0, groups: pr.groups || 0, inGroups: pr.inGroups || 0, paper: pr.paper || 0
   };
 }
 
@@ -549,7 +783,21 @@ async function ensureSchema(env) {
     env.DB.prepare('CREATE TABLE IF NOT EXISTS votes (game INTEGER NOT NULL, round INTEGER NOT NULL, player TEXT NOT NULL, cat INTEGER NOT NULL, voter TEXT NOT NULL, v INTEGER NOT NULL, PRIMARY KEY (game, round, player, cat, voter))'),
     env.DB.prepare('CREATE TABLE IF NOT EXISTS rounds (game INTEGER NOT NULL, round INTEGER NOT NULL, letter TEXT, scores TEXT, PRIMARY KEY (game, round))'),
     env.DB.prepare('CREATE TABLE IF NOT EXISTS lim (k TEXT PRIMARY KEY, n INTEGER NOT NULL, until INTEGER NOT NULL)'),
-    env.DB.prepare('CREATE TABLE IF NOT EXISTS daily (day TEXT NOT NULL, k TEXT NOT NULL, n INTEGER NOT NULL, PRIMARY KEY (day, k))')
+    env.DB.prepare('CREATE TABLE IF NOT EXISTS daily (day TEXT NOT NULL, k TEXT NOT NULL, n INTEGER NOT NULL, PRIMARY KEY (day, k))'),
+    env.DB.prepare('CREATE TABLE IF NOT EXISTS profiles (id INTEGER PRIMARY KEY AUTOINCREMENT, code TEXT UNIQUE, tok TEXT UNIQUE, name TEXT, color INTEGER DEFAULT 0, grp INTEGER, created INTEGER, seen INTEGER)'),
+    env.DB.prepare('CREATE INDEX IF NOT EXISTS profiles_grp ON profiles (grp)'),
+    env.DB.prepare('CREATE TABLE IF NOT EXISTS pgames (prof INTEGER NOT NULL, game INTEGER NOT NULL, player TEXT NOT NULL, token TEXT NOT NULL, PRIMARY KEY (prof, game, player))'),
+    env.DB.prepare('CREATE INDEX IF NOT EXISTS pgames_game ON pgames (game)'),
+    env.DB.prepare('CREATE TABLE IF NOT EXISTS ppaper (prof INTEGER NOT NULL, pid TEXT NOT NULL, data TEXT, updated INTEGER, PRIMARY KEY (prof, pid))'),
+    env.DB.prepare('CREATE TABLE IF NOT EXISTS pgroups (id INTEGER PRIMARY KEY AUTOINCREMENT, code TEXT UNIQUE, name TEXT NOT NULL, owner INTEGER, created INTEGER)')
+  ]);
+  // أعمدة جديدة على جداول قديمة (تنضاف مرة وحدة)
+  const cols = async (t) => ((await env.DB.prepare('PRAGMA table_info(' + t + ')').all()).results || []).map((c) => c.name);
+  if (!(await cols('players')).includes('prof')) await env.DB.prepare('ALTER TABLE players ADD COLUMN prof INTEGER').run();
+  if (!(await cols('games')).includes('grp')) await env.DB.prepare('ALTER TABLE games ADD COLUMN grp INTEGER').run();
+  await env.DB.batch([
+    env.DB.prepare('CREATE INDEX IF NOT EXISTS players_prof ON players (prof)'),
+    env.DB.prepare('CREATE INDEX IF NOT EXISTS games_grp ON games (grp)')
   ]);
   schemaReady = true;
 }

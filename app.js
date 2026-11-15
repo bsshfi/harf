@@ -1,5 +1,6 @@
 /* حَرف | HARF — منطق التطبيق
-   الرئيسية، السجل، الإعدادات، اللعبة الجماعية (تتكلم مع harf-api)، واللعب على ورقة. */
+   الرئيسية، السجل، الإعدادات، اللعبة الجماعية (تتكلم مع harf-api)، واللعب على ورقة،
+   و«ملفي» (رمز ٨ أرقام + نسخة احتياطية) و«قروب اللعب». */
 (function () {
   'use strict';
   const VERSION = CONFIG.VERSION, API = CONFIG.API, SITE = CONFIG.SITE, MAIL = CONFIG.MAIL;
@@ -25,11 +26,13 @@
     trophy: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0z"/><path d="M17 5h3v2a3 3 0 0 1-3 3M7 5H4v2a3 3 0 0 0 3 3"/></svg>',
     share: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M8 7l4-4 4 4"/><path d="M6 11H5a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-8a1 1 0 0 0-1-1h-1"/></svg>',
     copy: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="12" height="12" rx="2.5"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg>',
-    play: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13a1 1 0 0 0 1.5.9l10-6.5a1 1 0 0 0 0-1.7l-10-6.5A1 1 0 0 0 8 5.5z"/></svg>'
+    play: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13a1 1 0 0 0 1.5.9l10-6.5a1 1 0 0 0 0-1.7l-10-6.5A1 1 0 0 0 8 5.5z"/></svg>',
+    group: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 19c.6-3.2 2.8-5 5.5-5s4.9 1.8 5.5 5"/><circle cx="17" cy="9" r="2.5"/><path d="M15.5 14.2c2.6-.5 4.6 1.2 5 4.3"/></svg>',
+    chev: '<svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg>'
   };
 
   /* ---------- التخزين على الجهاز ---------- */
-  const S = Object.assign({ name: '', color: 0, theme: 'auto', sound: true, vib: true, games: [], paperN: 0, active: null, last: null }, (() => { try { return JSON.parse(localStorage.getItem('harf') || '{}'); } catch (e) { return {}; } })());
+  const S = Object.assign({ name: '', color: 0, theme: 'auto', sound: true, vib: true, games: [], paperN: 0, active: null, last: null, prof: null, grp: null, sg: [], live: [] }, (() => { try { return JSON.parse(localStorage.getItem('harf') || '{}'); } catch (e) { return {}; } })());
   const save = () => { try { localStorage.setItem('harf', JSON.stringify(S)); } catch (e) {} };
 
   /* ---------- أدوات الواجهة ---------- */
@@ -102,7 +105,7 @@
     $$('.tabs button').forEach((b) => { b.classList.toggle('on', b.dataset.v === tab); b.setAttribute('aria-current', b.dataset.v === tab ? 'page' : 'false'); });
     $$('.view').forEach((s) => s.classList.toggle('on', s.id === 'v-' + v));
     document.body.classList.toggle('ingame', v === 'game' || v === 'paper');
-    if (v === 'home') renderHome();
+    if (v === 'home') { renderHome(); if (Date.now() - lastSync > 30e3) syncMe(); }
     if (v === 'history') renderHistory();
     if (v === 'settings') renderSettings();
     window.scrollTo(0, 0);
@@ -129,11 +132,12 @@
   function hist(g) { return S.games.find((x) => !x.paper && x.g === g); }
   function recordState(s) {
     const gm = s.game; let h = hist(gm.id);
-    if (!h) { h = { g: gm.id, t: G.t, me: G.me, created: gm.created }; S.games.unshift(h); }
+    if (!h) { h = { g: gm.id, t: G.t, me: G.me, created: gm.created, synced: !!G.linked }; S.games.unshift(h); G.linked = false; }
     h.name = gm.name; h.settings = gm.settings; h.status = gm.status; h.code = gm.code; h.host = gm.host === s.me; h.round = gm.round; h.rounds = gm.settings.rounds; h.letters = gm.used;
     h.players = s.players.filter((p) => p.gone !== 2).map((p) => ({ id: p.id, name: p.name, color: p.color, score: p.score }));
     if (s.results) { h.winners = s.results.winners; h.finished = gm.finished; h.rounds = s.results.rounds; }
     h.updated = Date.now();
+    if (gm.status === 'done' && !h.doneSeen) { h.doneSeen = true; setTimeout(() => syncMe(), 1500); }
     if (S.games.length > 300) S.games.length = 300;
     save();
   }
@@ -143,7 +147,16 @@
     const a = S.active && hist(S.active.g);
     $('#resumeBox').innerHTML = a ? '<button class="big-btn resume" id="btnResume"><span class="bi" style="background:linear-gradient(135deg,#4FC79A,#21875F)">' + IC.play + '</span><span><b>ارجع للعبة</b><small><bdi>#' + a.g + '</bdi> · ' + esc(a.name || '') + ' · ' + statusText(a.status) + '</small></span><svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg></button>' : '';
     if (a) $('#btnResume').onclick = () => enterGame(S.active.g, S.active.t, S.active.me);
-    // بطل البيت: أكثر واحد فاز آخر ٣٠ يوم
+    renderGroupBox();
+    const lb = $('#linkBox');
+    if (lb) {
+      const show = !isStandalone() && isIOS() && S.games.length && !S.linkHint;
+      lb.innerHTML = show ? '<div class="gl champ"><span class="crown">' + IC.copy + '</span><span style="flex:1"><small>تلعب من المتصفح</small><b style="font-size:15px">اربط ألعابك هنا بتطبيقك</b></span><button class="lvbtn" id="lkGo">اربط</button><button class="icb" id="lkX" aria-label="إخفاء" style="width:34px;height:34px;color:var(--dim);background:var(--soft);border:0">' + IC.x + '</button></div>' : '';
+      if (show) { $('#lkGo').onclick = () => restoreSheet('', true); $('#lkX').onclick = () => { S.linkHint = 1; save(); renderHome(); }; }
+    }
+    const gc = S.grp && (S.grp.champ || []).filter((c) => c.wins > 0)[0];
+    if (gc) { $('#champBox').innerHTML = '<div class="gl champ"><span class="crown">' + IC.trophy + '</span><span><small>بطل القروب</small><b>' + esc(gc.name || '') + '</b> <small style="display:inline">· ' + plural(gc.wins, 'فوز واحد', 'فوزين', 'انتصارات', 'انتصار') + '</small></span></div>'; return; }
+    // بطل الشهر: أكثر واحد فاز آخر ٣٠ يوم
     const since = Date.now() - 30 * 864e5, wins = {};
     S.games.forEach((x) => { if (x.status === 'done' && (x.finished || x.created) > since) (x.winners || []).forEach((n) => { wins[n] = (wins[n] || 0) + 1; }); });
     const top = Object.keys(wins).sort((p, q) => wins[q] - wins[p])[0];
@@ -168,7 +181,8 @@
       '<div class="flabel">وقت الجولة (ثانية)</div><div class="seg wide" id="cgTime">' + TIMES.map((n) => '<button type="button" data-v="' + n + '" class="' + (n === st.time ? 'on' : '') + '">' + n + '</button>').join('') + '</div>' +
       '<div class="flabel">متى تخلص الجولة؟</div><div class="seg wide" id="cgMode"><button type="button" data-v="stop" class="' + (st.mode === 'stop' ? 'on' : '') + '">ستوب!</button><button type="button" data-v="time" class="' + (st.mode === 'time' ? 'on' : '') + '">لين يخلص الوقت</button></div>' +
       '<p id="cgModeTxt" style="margin:8px 4px 0;font-size:13px"></p>' +
-      '<div class="set" style="margin-top:12px"><div><span class="lbl">الحروف الصعبة<small>ث ذ ض ظ غ تطلع في العجلة</small></span><button type="button" class="switch" role="switch" id="cgHard" aria-checked="' + !!st.hard + '" aria-label="الحروف الصعبة"></button></div></div>';
+      '<div class="set" style="margin-top:12px"><div><span class="lbl">الحروف الصعبة<small>ث ذ ض ظ غ تطلع في العجلة</small></span><button type="button" class="switch" role="switch" id="cgHard" aria-checked="' + !!st.hard + '" aria-label="الحروف الصعبة"></button></div>' +
+      (withHead && S.grp ? '<div><span class="lbl">لعبة القروب<small>تطلع لأفراد «' + esc(S.grp.name) + '» بدون كود، وتنحفظ في سجل القروب</small></span><button type="button" class="switch" role="switch" id="cgGroup" aria-checked="true" aria-label="لعبة القروب"></button></div>' : '') + '</div>';
   }
   function bindSettingsForm(root) {
     const seg = (id) => $$('#' + id + ' button', root).forEach((b) => (b.onclick = () => { $$('#' + id + ' button', root).forEach((x) => x.classList.toggle('on', x === b)); if (id === 'cgMode') modeTxt(); }));
@@ -184,6 +198,7 @@
       $('#cgAddCat', root).before(b); bindCat(b); b.click();
     };
     $('#cgHard', root).onclick = (e) => { const b = e.currentTarget; b.setAttribute('aria-checked', b.getAttribute('aria-checked') !== 'true'); };
+    if ($('#cgGroup', root)) $('#cgGroup', root).onclick = (e) => { const b = e.currentTarget; b.setAttribute('aria-checked', b.getAttribute('aria-checked') !== 'true'); };
     $$('#cgColor button', root).forEach((b) => (b.onclick = () => $$('#cgColor button', root).forEach((x) => x.classList.toggle('on', x === b))));
   }
   function readSettingsForm(root) {
@@ -204,10 +219,13 @@
         const color = +(($('#cgColor .on') || {}).dataset || {}).c || 0;
         S.name = me; S.color = color; S.last = st; save();
         btn.disabled = true; btn.textContent = 'لحظة…';
-        const r = await api('/create', { name: $('#cgName').value.trim(), player: { name: me, color }, settings: st });
+        await ensureProfile();
+        const ptok = S.prof && S.prof.tok, group = !!($('#cgGroup') && $('#cgGroup').getAttribute('aria-checked') === 'true');
+        const r = await api('/create', { name: $('#cgName').value.trim(), player: { name: me, color }, settings: st, ptok, group });
         btn.disabled = false; btn.textContent = 'أنشئ اللعبة';
         if (r.error) { $('#cgErr').textContent = errText(r.error); return; }
         closeSheet(); SND.pop();
+        G.linked = !!ptok;
         enterGame(r.g, r.t, r.me, r.state);
       };
     });
@@ -245,10 +263,13 @@
         const color = +(($('#cgColor .on') || {}).dataset || {}).c || 0;
         S.name = me; S.color = color; save();
         btn.disabled = true; btn.textContent = 'لحظة…';
-        const r = await api('/join', { code: c, player: { name: me, color } });
+        await ensureProfile();
+        const ptok = S.prof && S.prof.tok;
+        const r = await api('/join', { code: c, player: { name: me, color }, ptok });
         btn.disabled = false; btn.textContent = 'ادخل';
         if (r.error) { $('#jnErr').textContent = errText(r.error); return; }
         closeSheet(); SND.pop();
+        G.linked = !!ptok;
         enterGame(r.g, r.t, r.me, r.state);
       };
     });
@@ -666,7 +687,7 @@
     $('#dnShare').onclick = () => shareResult(gm.id, gm.name, rows, s.rounds);
     $('#dnNew').onclick = () => { G.g = 0; openCreate(gm.settings); };
     $('#dnHome').onclick = () => { G.g = 0; show('home'); };
-    if (full && G.confetti !== gm.id) { G.confetti = gm.id; confetti(); }
+    if (full && G.confetti !== gm.id) { G.confetti = gm.id; confetti(); askSaveCode(3500); }
   }
   function confetti() {
     const box = document.createElement('div'); box.className = 'confetti';
@@ -708,25 +729,46 @@
   }, 250);
 
   /* ================= السجل ================= */
-  function renderHistory() {
-    const list = S.games.slice().sort((a, b) => (b.created || 0) - (a.created || 0));
-    if (!list.length) {
-      $('#histList').innerHTML = '<div class="gl empty" style="margin-top:14px"><div class="tiles"><span class="tile o">ح</span><span class="tile">ر</span><span class="tile">ف</span></div>ما لعبت للحين. أول لعبة تنحفظ هنا برقمها واسمها ونتيجتها.</div>';
-      return;
-    }
-    $('#histList').innerHTML = '<div class="hhead"><h2>ألعابك</h2><span>' + list.length + ' لعبة</span></div>' + list.map((h, i) => {
-      const live = !h.paper && h.status && h.status !== 'done';
-      const ps = (h.players || []).slice().sort((a, b) => b.score - a.score);
-      const win = h.winners && h.winners.length ? h.winners.join(' و ') : '';
-      return '<button class="hist" data-i="' + S.games.indexOf(h) + '"><span class="h1"><span class="num">' + (h.paper ? 'ورقة ' + h.n : '#' + h.g) + '</span><span class="nm">' + esc(h.name || '') + '</span>' +
-        (live ? '<span class="tag live">' + statusText(h.status) + '</span>' : h.paper ? '<span class="tag paper">على ورقة</span>' : h.kicked ? '<span class="tag half">طلعت منها</span>' : '') + '</span>' +
-        '<span class="h2"><span class="avs">' + ps.slice(0, 5).map((p) => av(p.name, p.color || 0, 'sm')).join('') + '</span><span>' + fmtDate(h.created) + '</span>' +
-        (win ? '<span class="win">' + IC.crown + esc(win) + '</span>' : '') + '</span></button>';
-    }).join('');
-    $$('.hist').forEach((b) => (b.onclick = () => openHist(S.games[+b.dataset.i])));
+  let histTab = 'mine';
+  function histCard(h, src, i) {
+    const live = !h.paper && h.status && h.status !== 'done';
+    const ps = (h.players || []).slice().sort((a, b) => b.score - a.score);
+    const win = h.winners && h.winners.length ? h.winners.join(' و ') : '';
+    const half = !h.paper && h.status === 'done' && !h.rounds;
+    return '<button class="hist" data-src="' + src + '" data-i="' + i + '"><span class="h1"><span class="num">' + (h.paper ? 'ورقة ' + (h.n || '') : '#' + h.g) + '</span><span class="nm">' + esc(h.name || '') + '</span>' +
+      (live ? '<span class="tag live">' + statusText(h.status) + '</span>' : h.paper ? '<span class="tag paper">على ورقة</span>' : h.kicked ? '<span class="tag half">طلعت منها</span>' : half ? '<span class="tag half">ما كملت</span>' : '') + '</span>' +
+      '<span class="h2"><span class="avs">' + ps.slice(0, 5).map((p) => av(p.name, p.color || 0, 'sm')).join('') + '</span><span>' + fmtDate(h.created) + '</span>' +
+      (win ? '<span class="win">' + IC.crown + esc(win) + '</span>' : '') + '</span></button>';
   }
-  async function openHist(h) {
+  function renderHistory() {
+    const g = S.grp;
+    if (!g) histTab = 'mine';
+    const seg = g ? '<div class="seg wide" id="hTabs" style="margin-top:16px"><button data-v="mine" class="' + (histTab === 'mine' ? 'on' : '') + '">ألعابي</button><button data-v="group" class="' + (histTab === 'group' ? 'on' : '') + '">' + esc(g.name) + '</button></div>' : '';
+    let html = seg;
+    if (histTab === 'group') {
+      const list = (S.sg || []).slice().sort((a, b) => (b.created || 0) - (a.created || 0));
+      const ch = (g.champ || []).filter((c) => c.games > 0);
+      html += (ch.length ? '<div class="gl tbl" style="margin-top:12px"><div class="tr th"><span>#</span><span>بطل القروب</span><span style="text-align:center">فوز</span><span style="text-align:left">نقاط</span></div>' +
+        ch.map((c, i) => '<div class="tr' + (i === 0 && c.wins ? ' lead' : '') + '"><span class="rk">' + (i + 1) + '</span><span class="who">' + av(c.name, c.color, 'sm') + '<b>' + esc(c.name || '') + '</b></span><span class="plus" style="color:var(--fg)">' + c.wins + '</span><span class="tot">' + c.points + '</span></div>').join('') + '</div>' : '') +
+        (list.length ? '<div class="hhead"><h2>ألعاب القروب</h2><span>' + list.length + ' لعبة</span></div>' + list.map((h, i) => histCard(h, 'g', i)).join('')
+          : '<div class="gl empty">ألعاب القروب تنحفظ هنا: أي لعبة يلعبها اثنين أو أكثر من أفراد القروب.</div>');
+      $('#histList').innerHTML = html;
+      $$('.hist').forEach((b) => (b.onclick = () => openHist(S.sg.slice().sort((a, b) => (b.created || 0) - (a.created || 0))[+b.dataset.i], true)));
+    } else {
+      const list = S.games.slice().sort((a, b) => (b.created || 0) - (a.created || 0));
+      html += list.length ? '<div class="hhead"><h2>ألعابك</h2><span>' + list.length + ' لعبة</span></div>' + list.map((h) => histCard(h, 'm', S.games.indexOf(h))).join('')
+        : '<div class="gl empty"><div class="tiles"><span class="tile o">ح</span><span class="tile">ر</span><span class="tile">ف</span></div>ما لعبت للحين. أول لعبة تنحفظ هنا برقمها واسمها ونتيجتها.</div>';
+      if (S.prof && S.prof.code) html += '<button class="txt-btn" id="hCode" style="display:block;margin:14px auto 0">ألعابك محفوظة في ملفك · رمز ملفي</button>';
+      $('#histList').innerHTML = html;
+      $$('.hist').forEach((b) => (b.onclick = () => openHist(S.games[+b.dataset.i])));
+      if ($('#hCode')) $('#hCode').onclick = () => codeSheet();
+    }
+    $$('#hTabs button').forEach((b) => (b.onclick = () => { histTab = b.dataset.v; renderHistory(); }));
+  }
+  async function openHist(h, fromGroup) {
     if (!h) return;
+    const mineH = !h.paper && hist(h.g);
+    if (fromGroup && mineH) h = mineH;
     const ps = (h.players || []).slice().sort((a, b) => b.score - a.score);
     let rank = 0, prev = null; const rows = ps.map((p, i) => { if (p.score !== prev) { rank = i + 1; prev = p.score; } return Object.assign({ rank }, p); });
     const head = '<div class="ab-hero"><h2>' + esc(h.name || '') + '</h2><div class="v">' + (h.paper ? 'ورقة ' + h.n : '#' + h.g) + ' · ' + fmtDate(h.created) + ' ' + fmtTime(h.created) + '</div></div>';
@@ -736,17 +778,22 @@
       (rows.length ? '<button class="link-btn" id="hShare">' + IC.share + 'شارك النتيجة</button>' : '') +
       (!h.paper && h.host ? '<button class="link-btn" id="hRen">غيّر الاسم</button>' : '') +
       (!live ? '<button class="link-btn" id="hAgain">العب مرة ثانية بنفس الإعدادات</button>' : '') +
-      '<button class="link-btn danger" id="hDel">احذفها من سجلّي</button>', async () => {
-      if ($('#hGo')) $('#hGo').onclick = () => { closeSheet(); enterGame(h.g, h.t, h.me, null, true); };
+      (h.paper || h.t ? '<button class="link-btn danger" id="hDel">احذفها من سجلّي</button>' : ''), async () => {
+      if ($('#hGo')) $('#hGo').onclick = () => { closeSheet(); if (h.t) enterGame(h.g, h.t, h.me, null, true); else if (h.code) joinLive({ id: h.g, code: h.code }); };
       if ($('#hShare')) $('#hShare').onclick = () => shareResult(h.paper ? 0 : h.g, h.name, rows, h.paper ? (h.letters || '').split('').map((l) => ({ letter: l })) : h.rounds_d);
       if ($('#hRen')) $('#hRen').onclick = () => sheet('<h2>اسم اللعبة</h2><input class="tin" id="rnName" maxlength="40" value="' + esc(h.name) + '"><button class="link-btn primary" id="rnGo">حفظ</button>', () => {
         $('#rnGo').onclick = async () => { const n = $('#rnName').value.trim(); if (!n) return; const r = await api('/act', { g: h.g, t: h.t, a: 'rename', name: n }); if (r.error) { toast(errText(r.error)); return; } h.name = n; save(); closeSheet(); renderHistory(); };
       });
       if ($('#hAgain')) $('#hAgain').onclick = () => { closeSheet(); if (h.paper) openPaperSetup(h); else openCreate(h.settings || S.last); };
-      $('#hDel').onclick = () => confirmSheet('تحذفها من سجلّك؟', 'تنحذف من جهازك بس.', 'احذف', () => { S.games.splice(S.games.indexOf(h), 1); save(); renderHistory(); }, true);
+      if ($('#hDel')) $('#hDel').onclick = () => confirmSheet('تحذفها من سجلّك؟', 'تنحذف من سجلّك وملفك. اللعبة نفسها تبقى عند اللي لعبوها معك.', 'احذف', () => {
+        if (S.prof && S.prof.tok) api('/me', h.paper ? { a: 'paperdel', tok: S.prof.tok, pid: h.pid } : { a: 'hide', tok: S.prof.tok, g: h.g });
+        const i = S.games.indexOf(h); if (i >= 0) S.games.splice(i, 1);
+        if (S.active && S.active.g === h.g) S.active = null;
+        save(); renderHistory();
+      }, true);
       if (h.paper) { $('#hDet').innerHTML = h.letters ? '<p style="text-align:center;margin-top:12px">الحروف: <b class="fd">' + h.letters.split('').map(showL).join(' ') + '</b></p>' : ''; return; }
       $('#hDet').innerHTML = '<p class="wait dots">نجيب التفاصيل</p>';
-      const d = await api('/game?g=' + h.g + '&t=' + encodeURIComponent(h.t));
+      const d = await api('/game?g=' + h.g + (h.t ? '&t=' + encodeURIComponent(h.t) : '&ptok=' + encodeURIComponent((S.prof && S.prof.tok) || '')));
       const box = $('#hDet'); if (!box) return;
       if (d.error) { box.innerHTML = '<p class="wait">' + (d.error === 'net' ? 'التفاصيل تحتاج إنترنت' : 'ما قدرنا نجيب التفاصيل') + '</p>'; return; }
       h.settings = d.game.settings; h.rounds_d = d.rounds; save();
@@ -761,7 +808,7 @@
   }
 
   /* ================= اللعب على ورقة ================= */
-  let P = null, paperT = 0;
+  let P = null, paperT = 0, paperSyncT = 0;
   function openPaperSetup(prev) {
     const names = (prev && prev.players ? prev.players.map((p) => p.name) : [S.name || '']).filter(Boolean);
     const st = Object.assign({}, DEF, (prev && prev.settings) || S.last || {});
@@ -785,7 +832,7 @@
         if ($('#ppAdd').value.trim()) add();
         if (!list.length) { $('#ppErr').textContent = 'أضف لاعب واحد على الأقل'; return; }
         S.paperN = (S.paperN || 0) + 1; save();
-        P = { n: S.paperN, name: $('#ppName').value.trim() || 'ورقة ' + S.paperN, created: Date.now(), players: list.map((n, i) => ({ name: n, color: i % COLORS.length, score: 0 })),
+        P = { pid: 'p' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), n: S.paperN, name: $('#ppName').value.trim() || 'ورقة ' + S.paperN, created: Date.now(), players: list.map((n, i) => ({ name: n, color: i % COLORS.length, score: 0 })),
           settings: { rounds: +$('#cgRounds .on').dataset.v, time: +$('#cgTime .on').dataset.v, hard: $('#cgHard').getAttribute('aria-checked') === 'true', cats: st.cats },
           round: 0, used: '', letter: '', phase: 'spin', ends: 0, pts: [] };
         closeSheet(); show('paper'); paperNext();
@@ -844,11 +891,12 @@
     if ($('#ppEnd')) $('#ppEnd').onclick = () => { commit(); paperDone(); };
   }
   function paperSave() {
-    let h = S.games.find((x) => x.paper && x.n === P.n);
-    if (!h) { h = { paper: true, n: P.n, created: P.created }; S.games.unshift(h); }
+    let h = S.games.find((x) => x.paper && x.pid === P.pid);
+    if (!h) { h = { paper: true, pid: P.pid, n: P.n, created: P.created }; S.games.unshift(h); }
     const ps = P.players.slice().sort((a, b) => b.score - a.score), top = ps[0] ? ps[0].score : 0;
-    Object.assign(h, { name: P.name, status: 'done', players: P.players.map((p) => ({ name: p.name, color: p.color, score: p.score })), letters: P.pts.map((x) => x.letter).join(''), rounds: P.pts.length, settings: P.settings, winners: top ? ps.filter((p) => p.score === top).map((p) => p.name) : [], finished: Date.now() });
+    Object.assign(h, { name: P.name, status: 'done', players: P.players.map((p) => ({ name: p.name, color: p.color, score: p.score })), letters: P.pts.map((x) => x.letter).join(''), rounds: P.pts.length, settings: P.settings, winners: top ? ps.filter((p) => p.score === top).map((p) => p.name) : [], finished: Date.now(), synced: false });
     save();
+    clearTimeout(paperSyncT); paperSyncT = setTimeout(() => syncMe(), 2000);
   }
   function paperDone() {
     clearInterval(paperT); P.phase = 'done'; paperSave();
@@ -858,24 +906,310 @@
     $('#v-paper').innerHTML = pTop('<div class="win-t">انتهت اللعبة</div><div class="win-n">' + (win.length ? 'الفايز: ' + esc(win.map((w) => w.name).join(' و ')) : 'نعيدها؟') + '</div>') +
       podiumHTML(rows) + '<div class="gl tbl">' + rows.map((p) => '<div class="tr"><span class="rk">' + p.rank + '</span><span class="who">' + av(p.name, p.color, 'sm') + '<b>' + esc(p.name) + '</b></span><span></span><span class="tot">' + p.score + '</span></div>').join('') + '</div>' +
       '<p class="wait">انحفظت في السجل: ورقة ' + P.n + ' · ' + esc(P.name) + '</p><button class="link-btn primary" id="ppShare">' + IC.share + 'شارك النتيجة</button><button class="link-btn" id="ppHome">الرئيسية</button>';
-    pBind(); SND.win(); confetti();
+    pBind(); SND.win(); confetti(); askSaveCode(3500);
     const n = P.name, letters = P.pts.map((x) => ({ letter: x.letter }));
     $('#ppShare').onclick = () => shareResult(0, n, rows, letters);
     $('#ppHome').onclick = () => { P = null; show('home'); };
   }
 
+  /* ================= ملفي: رمز ٨ أرقام ونسخة احتياطية ================= */
+  const fmtCode = (c) => String(c || '').replace(/^(\d{4})(\d{4})$/, '$1 $2');
+  const ptok = () => (S.prof && S.prof.tok) || '';
+  async function ensureProfile() {
+    if (S.prof && S.prof.tok) return true;
+    const r = await api('/me', { a: 'new', name: S.name, color: S.color });
+    if (r.error) return false;
+    S.prof = { tok: r.tok, code: r.code, id: r.id, saved: false };
+    save();
+    return true;
+  }
+  function paperData(x) { const d = Object.assign({}, x); delete d.synced; return d; }
+  let syncBusy = false, syncAgain = false, lastSync = 0;
+  async function syncMe() {
+    if (syncBusy) { syncAgain = true; return; }
+    syncBusy = true;
+    try {
+      if (!(await ensureProfile())) return;
+      const games = S.games.filter((x) => !x.paper && x.t && !x.synced);
+      const paper = S.games.filter((x) => x.paper && !x.synced);
+      paper.forEach((x) => { if (!x.pid) x.pid = 'p' + (x.created || Date.now()).toString(36) + (x.n || ''); });
+      const r = await api('/me', { a: 'sync', tok: ptok(), name: S.name, color: S.color, games: games.map((x) => ({ g: x.g, t: x.t })), paper: paper.map((x) => ({ pid: x.pid, data: JSON.stringify(paperData(x)) })) });
+      if (r.error === 'auth') { S.prof = null; save(); syncAgain = true; return; }
+      if (r.error) return;
+      games.concat(paper).forEach((x) => { x.synced = true; });
+      lastSync = Date.now();
+      applyMe(r);
+      if (!S.prof.asked && S.games.length) askSaveCode(1200);
+    } finally { syncBusy = false; if (syncAgain) { syncAgain = false; setTimeout(syncMe, 300); } }
+  }
+  function applyMe(r) {
+    if (!r || !r.profile) return;
+    S.prof.code = r.profile.code; S.prof.id = r.profile.id;
+    if (!S.name && r.profile.name) { S.name = r.profile.name; S.color = r.profile.color || 0; }
+    S.grp = r.group || null; S.live = r.live || [];
+    S.sg = S.grp ? r.games.filter((x) => x.grp === S.grp.id) : [];
+    for (const x of r.games) {
+      if (!x.t) continue;
+      let h = hist(x.g);
+      if (!h) { h = { g: x.g }; S.games.push(h); }
+      Object.assign(h, { t: x.t, me: x.me, name: x.name, status: x.status, host: x.host, letters: x.letters, rounds: x.rounds, winners: x.winners, finished: x.finished,
+        created: x.created, settings: x.settings, code: x.code, grp: x.grp, synced: true, players: x.players.map((p) => ({ id: p.id, name: p.name, color: p.color, score: p.score })) });
+      if (x.status === 'done' && S.active && S.active.g === x.g && G.g !== x.g) S.active = null;
+    }
+    for (const pp of r.paper || []) {
+      if (S.games.some((x) => x.paper && x.pid === pp.pid)) continue;
+      let d; try { d = JSON.parse(pp.data); } catch (e) { continue; }
+      d.pid = pp.pid; d.paper = true; d.synced = true; S.games.push(d);
+      S.paperN = Math.max(S.paperN || 0, d.n || 0);
+    }
+    S.games.sort((a, b) => (b.created || 0) - (a.created || 0));
+    save();
+    if (current === 'home') renderHome();
+    else if (current === 'history') renderHistory();
+    else if (current === 'settings') renderSettings();
+  }
+
+  function codeSheet(ask) {
+    if (!S.prof || !S.prof.code) { toast('ما فيه اتصال، جرّب بعد شوي'); syncMe(); return; }
+    sheet('<div class="ab-hero"><span class="bi-big">' + IC.group.replace('viewBox', 'width="34" height="34" viewBox') + '</span><h2>' + (ask ? 'احفظ رمز ملفك' : 'رمز ملفي') + '</h2></div>' +
+      '<div class="bigcode ltr" id="cdCode">' + fmtCode(S.prof.code) + '</div>' +
+      '<p style="text-align:center">بهالرمز ترجع كل ألعابك وألعاب الورقة وقروبك، لو غيّرت جوالك أو حذفت التطبيق أو لعبت من جهاز ثاني. احفظه في مكان آمن ولا تعطيه أحد.</p>' +
+      '<div class="row2"><button class="link-btn" id="cdCopy">' + IC.copy + 'نسخ</button><button class="link-btn" id="cdImg">' + IC.share + 'احفظه صورة</button></div>' +
+      '<button class="link-btn primary" id="cdOk">' + (S.prof.saved ? 'تم' : 'حفظته ✓') + '</button>' +
+      (!ask ? '<button class="txt-btn" id="cdRestore" style="display:block;margin:8px auto 0">عندي رمز ثاني؟ استرجع ملفي</button>' : ''), () => {
+      $('#cdCopy').onclick = async () => { try { await navigator.clipboard.writeText(S.prof.code); toast('انسخ الرمز'); } catch (e) { toast(S.prof.code); } };
+      $('#cdImg').onclick = codeImage;
+      $('#cdOk').onclick = () => { S.prof.saved = true; S.prof.asked = true; save(); closeSheet(); if (current === 'settings') renderSettings(); };
+      if ($('#cdRestore')) $('#cdRestore').onclick = () => restoreSheet();
+    }, () => { S.prof.asked = true; save(); });
+  }
+  let askT = 0;
+  function askSaveCode(delay) {
+    if (!S.prof || S.prof.saved || S.prof.asked) return;
+    clearTimeout(askT);
+    // ما يغطي اللعب ولا النتيجة: ينتظر لين ترجع للرئيسية أو السجل أو الإعدادات
+    const tryAsk = () => {
+      if (!S.prof || S.prof.asked || S.prof.saved) return;
+      if (current === 'game' || current === 'paper' || $('#sheetBg').classList.contains('on') || !$('#gate').hidden) { askT = setTimeout(tryAsk, 2000); return; }
+      codeSheet(true);
+    };
+    askT = setTimeout(tryAsk, delay || 1500);
+  }
+  /* صورة فيها الرمز تنحفظ في الصور */
+  async function codeImage() {
+    try {
+      const c = document.createElement('canvas'); c.width = 1080; c.height = 1350;
+      const x = c.getContext('2d');
+      const gr = x.createLinearGradient(0, 0, 400, 1350); gr.addColorStop(0, '#16A08F'); gr.addColorStop(0.5, '#0F7A71'); gr.addColorStop(1, '#0A5953');
+      x.fillStyle = gr; x.fillRect(0, 0, 1080, 1350);
+      x.strokeStyle = 'rgba(255,255,255,.12)'; x.lineWidth = 4;
+      [[90, 120, 120, -0.2], [880, 160, 90, 0.18], [140, 1080, 100, 0.25], [860, 1040, 130, -0.12], [520, 70, 60, 0.1]].forEach(([a, b, w, r]) => { x.save(); x.translate(a, b); x.rotate(r); x.beginPath(); x.roundRect(-w / 2, -w / 2, w, w, w * 0.26); x.stroke(); x.restore(); });
+      const tiles = [['ف', '#FFF4E2', '#C9590A', 380], ['ر', '#FFF4E2', '#C9590A', 540], ['ح', '#F5841F', '#ffffff', 700]];
+      tiles.forEach(([ch, bg, fg, cx]) => { x.fillStyle = 'rgba(0,0,0,.18)'; x.beginPath(); x.roundRect(cx - 70, 260, 140, 140, 36); x.fill(); x.fillStyle = bg; x.beginPath(); x.roundRect(cx - 70, 248, 140, 140, 36); x.fill();
+        x.fillStyle = fg; x.font = '800 96px "Baloo Bhaijaan 2","IBM Plex Sans Arabic",sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText(ch, cx, 330); });
+      x.fillStyle = '#fff'; x.textAlign = 'center'; x.direction = 'rtl';
+      x.font = '700 64px "IBM Plex Sans Arabic",sans-serif'; x.fillText('رمز ملفي في حَرف', 540, 520);
+      x.fillStyle = '#FFF8EE'; x.beginPath(); x.roundRect(120, 600, 840, 230, 48); x.fill();
+      x.fillStyle = '#0B5F58'; x.direction = 'ltr'; x.font = '800 150px -apple-system,"SF Pro Rounded",system-ui,sans-serif'; x.fillText(fmtCode(S.prof.code), 540, 718);
+      x.direction = 'rtl'; x.fillStyle = 'rgba(255,255,255,.95)'; x.font = '500 40px "IBM Plex Sans Arabic",sans-serif';
+      x.fillText('يرجّع كل ألعابك وقروبك على أي جهاز', 540, 920); x.fillText('الإعدادات ← استرجاع ملفي', 540, 980);
+      x.fillStyle = '#F26B1D'; x.beginPath(); x.roundRect(390, 1170, 300, 76, 38); x.fill();
+      x.fillStyle = '#fff'; x.direction = 'ltr'; x.font = '700 38px "IBM Plex Sans Arabic",sans-serif'; x.fillText('WAMD ARC', 540, 1210);
+      x.fillStyle = 'rgba(255,255,255,.85)'; x.font = '400 30px Montserrat,system-ui,sans-serif'; x.fillText('harf.wamdarc.com', 540, 1290);
+      const blob = await new Promise((res) => c.toBlob(res, 'image/png'));
+      const file = new File([blob], 'harf-code-' + S.prof.code + '.png', { type: 'image/png' });
+      if (navigator.canShare && navigator.canShare({ files: [file] })) { try { await navigator.share({ files: [file] }); return; } catch (e) { if (e && e.name === 'AbortError') return; } }
+      const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = file.name; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1500);
+    } catch (e) { toast('ما قدرنا نسوي الصورة، انسخ الرمز'); }
+  }
+  function restoreSheet(code, browser) {
+    sheet('<h2>' + (browser ? 'اربط ألعابك بتطبيقك' : 'استرجاع ملفي') + '</h2>' +
+      '<p>' + (browser ? 'تلعب من المتصفح، وألعابك هنا محفوظة لحالها. افتح تطبيق حَرف ← الإعدادات ← «رمز ملفي»، واكتب الرمز هنا. تنضم كل ألعابك في ملف واحد.' : 'اكتب رمز ملفك (٨ أرقام). ترجع كل ألعابك وقروبك، والألعاب اللي على هالجهاز تنضاف معها.') + '</p>' +
+      '<input class="tin codein" id="rsCode" inputmode="numeric" maxlength="9" placeholder="--------" value="' + esc(code || '') + '">' +
+      '<div class="err" id="rsErr"></div><button class="link-btn primary" id="rsGo">' + (browser ? 'اربط' : 'استرجع') + '</button>', () => {
+      const inp = $('#rsCode');
+      inp.addEventListener('input', () => { const v = inp.value.replace(/[٠-٩]/g, (d) => '٠١٢٣٤٥٦٧٨٩'.indexOf(d)).replace(/\D/g, '').slice(0, 8); if (inp.value !== v) inp.value = v; $('#rsErr').textContent = ''; });
+      setTimeout(() => inp.focus(), 250);
+      $('#rsGo').onclick = async (e) => {
+        const c = inp.value.replace(/\D/g, '');
+        if (c.length !== 8) { $('#rsErr').textContent = 'الرمز ٨ أرقام'; return; }
+        if (S.prof && c === S.prof.code) { $('#rsErr').textContent = 'هذا رمز ملفك الحالي'; return; }
+        const btn = e.currentTarget; btn.disabled = true; btn.textContent = 'لحظة…';
+        const r = await restoreCode(c);
+        btn.disabled = false; btn.textContent = browser ? 'اربط' : 'استرجع';
+        if (r.error) { $('#rsErr').textContent = r.error === 'isgroup' ? 'هذا رمز قروب، تدخله من «قروب اللعب»' : r.error === 'nocode' ? 'ما لقينا ملف بهالرمز، تأكد منه' : errText(r.error); return; }
+        closeSheet(); SND.pop();
+        toast('رجع ملفك: ' + S.games.length + ' لعبة' + (S.grp ? ' · قروب ' + S.grp.name : ''));
+      };
+    });
+  }
+  async function restoreCode(code) {
+    await ensureProfile();
+    const r = await api('/restore', { code, tok: ptok() });
+    if (r.error) return r;
+    S.prof = { tok: r.tok, code: r.profile.code, id: r.profile.id, saved: true, asked: true };
+    save();
+    applyMe(r);
+    await syncMe();
+    return r;
+  }
+  /* نسخة احتياطية: ملف فيه كل سجلّك ورمز ملفك */
+  async function exportBackup() {
+    const d = new Date(), day = d.toISOString().slice(0, 10);
+    const data = { app: 'harf', v: VERSION, date: d.toISOString(), prof: S.prof ? { code: S.prof.code } : null, name: S.name, color: S.color, games: S.games.map((x) => { const y = Object.assign({}, x); delete y.synced; return y; }) };
+    const blob = new Blob([JSON.stringify(data)], { type: 'application/json' });
+    const file = new File([blob], 'harf-backup-' + day + '.json', { type: 'application/json' });
+    if (navigator.canShare && navigator.canShare({ files: [file] })) { try { await navigator.share({ files: [file], title: 'نسخة حَرف الاحتياطية' }); toastLater(); return; } catch (e) { if (e && e.name === 'AbortError') return; } }
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = file.name; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1500);
+    toastLater();
+  }
+  function toastLater() { S.backupAt = Date.now(); save(); if (current === 'settings') renderSettings(); }
+  function importBackup() {
+    const inp = document.createElement('input'); inp.type = 'file'; inp.accept = '.json,application/json';
+    inp.onchange = async () => {
+      const f = inp.files && inp.files[0]; if (!f) return;
+      let b; try { b = JSON.parse(await f.text()); } catch (e) { toast('الملف مو نسخة حَرف'); return; }
+      if (!b || b.app !== 'harf' || !Array.isArray(b.games)) { toast('الملف مو نسخة حَرف'); return; }
+      let added = 0;
+      for (const x of b.games) {
+        if (x.paper) { if (!x.pid) x.pid = 'p' + (x.created || 0).toString(36) + (x.n || ''); if (S.games.some((y) => y.paper && y.pid === x.pid)) continue; }
+        else if (!x.g || hist(x.g)) continue;
+        x.synced = false; S.games.push(x); added++;
+      }
+      if (!S.name && b.name) { S.name = b.name; S.color = b.color || 0; }
+      save();
+      if (b.prof && b.prof.code && (!S.prof || S.prof.code !== b.prof.code)) { const r = await restoreCode(b.prof.code); if (r.error && r.error !== 'nocode') toast(errText(r.error)); }
+      await syncMe();
+      toast(added ? 'رجعت ' + added + ' لعبة من النسخة' : 'كل ألعاب النسخة موجودة عندك');
+      renderSettings();
+    };
+    inp.click();
+  }
+
+  /* ================= قروب اللعب ================= */
+  function renderGroupBox() {
+    const box = $('#groupBox'); if (!box) return;
+    const g = S.grp;
+    if (!g) {
+      box.innerHTML = '<button class="big-btn" id="btnGroup"><span class="bi" style="background:linear-gradient(135deg,#9D7BEA,#6A45C9)">' + IC.group + '</span><span><b>قروب اللعب</b><small>قروب لعائلتك: سجل واحد وألعاب تطلع لهم بدون كود</small></span>' + IC.chev + '</button>';
+    } else {
+      const live = (S.live || []).filter((l) => !(hist(l.id) && hist(l.id).kicked));
+      box.innerHTML = '<div class="gl grp"><button class="grp-h" id="btnGroup"><span class="bi" style="background:linear-gradient(135deg,#9D7BEA,#6A45C9)">' + IC.group + '</span><span class="gn"><b>' + esc(g.name) + '</b><small>' + g.members.length + ' أفراد' + (g.members.filter((m) => m.on && !m.me).length ? ' · ' + g.members.filter((m) => m.on && !m.me).length + ' متصل الحين' : '') + '</small></span><span class="avs">' + g.members.slice(0, 5).map((m) => av(m.name || '؟', m.color || 0, 'sm')).join('') + '</span></button>' +
+        live.map((l) => '<div class="live"><span class="dotlive" aria-hidden="true"></span><span class="lv"><b>' + esc(l.name) + '</b><small><bdi>#' + l.id + '</bdi> · ' + esc(l.host || '') + ' · ' + l.players + ' لاعب · ' + statusText(l.status) + '</small></span><button class="lvbtn" data-g="' + l.id + '">' + (l.mine ? 'ارجع' : 'ادخل') + '</button></div>').join('') + '</div>';
+      $$('.lvbtn').forEach((b) => (b.onclick = () => joinLive((S.live || []).find((l) => l.id === +b.dataset.g))));
+    }
+    $('#btnGroup').onclick = () => openGroup();
+  }
+  async function joinLive(l) {
+    if (!l) return;
+    const h = hist(l.id);
+    if (h && h.t) { enterGame(h.g, h.t, h.me, null, true); return; }
+    if (!S.name) { openJoin(l.code); return; }
+    const r = await api('/join', { code: l.code, player: { name: S.name, color: S.color }, ptok: ptok() });
+    if (r.error) { toast(errText(r.error)); return; }
+    SND.pop(); G.linked = true;
+    enterGame(r.g, r.t, r.me, r.state);
+  }
+  function openGroup(code) {
+    const g = S.grp;
+    if (!g) {
+      sheet('<h2>قروب اللعب</h2><p>قروب لعائلتك أو أصحابك: كل ألعابكم تنحفظ في سجل واحد، وأي لعبة يبدأها واحد منكم تطلع للباقين بدون كود.</p>' +
+        '<div class="flabel">قروب جديد</div><input class="tin" id="grName" maxlength="30" placeholder="مثلاً: عائلة باسل"><button class="link-btn primary" id="grNew">أنشئ القروب</button>' +
+        '<div class="or"><span>أو</span></div>' +
+        '<div class="flabel">ادخل قروب</div><input class="tin codein" id="grCode" inputmode="numeric" maxlength="9" placeholder="--------" value="' + esc(code || '') + '">' +
+        '<div id="grInfo" style="text-align:center;font-weight:700;margin-top:8px;min-height:24px"></div><div class="err" id="grErr"></div><button class="link-btn" id="grJoin">ادخل القروب</button>', () => {
+        const inp = $('#grCode'); let last = '';
+        const check = async () => {
+          const c = inp.value.replace(/[٠-٩]/g, (d) => '٠١٢٣٤٥٦٧٨٩'.indexOf(d)).replace(/\D/g, '').slice(0, 8);
+          if (inp.value !== c) inp.value = c;
+          $('#grErr').textContent = '';
+          if (c.length < 8) { $('#grInfo').textContent = ''; last = ''; return; }
+          if (c === last) return; last = c;
+          await ensureProfile();
+          const r = await api('/group', { tok: ptok(), a: 'join', code: c, check: 1 });
+          if (inp.value !== c) return;
+          $('#grInfo').innerHTML = r.error ? '<span style="color:var(--bad)">' + (r.error === 'isprofile' ? 'هذا رمز ملف، مو رمز قروب' : r.error === 'nogroup' ? 'ما لقينا قروب بهالرمز' : esc(errText(r.error))) + '</span>' : '<span style="color:var(--good)">✓ ' + esc(r.name) + ' · ' + r.members + ' أفراد</span>';
+        };
+        inp.addEventListener('input', check); if (code) check();
+        $('#grNew').onclick = async (e) => {
+          const n = $('#grName').value.trim(); if (!n) { $('#grName').focus(); return; }
+          const btn = e.currentTarget; btn.disabled = true; await ensureProfile();
+          const r = await api('/group', { tok: ptok(), a: 'create', name: n });
+          btn.disabled = false;
+          if (r.error) { $('#grErr').textContent = errText(r.error); return; }
+          applyMe(r); SND.pop(); openGroup();
+        };
+        $('#grJoin').onclick = async (e) => {
+          const c = inp.value.replace(/\D/g, ''); if (c.length !== 8) { $('#grErr').textContent = 'رمز القروب ٨ أرقام'; return; }
+          const btn = e.currentTarget; btn.disabled = true; await ensureProfile();
+          const r = await api('/group', { tok: ptok(), a: 'join', code: c });
+          btn.disabled = false;
+          if (r.error) { $('#grErr').textContent = r.error === 'isprofile' ? 'هذا رمز ملف، تدخله من «استرجاع ملفي»' : r.error === 'nogroup' ? 'ما لقينا قروب بهالرمز' : errText(r.error); return; }
+          applyMe(r); closeSheet(); SND.win(); toast('صرت في قروب «' + r.group.name + '»');
+        };
+      });
+      return;
+    }
+    const link = SITE + '#q=' + g.code;
+    sheet('<div class="ab-hero"><span class="bi-big" style="background:linear-gradient(135deg,#9D7BEA,#6A45C9)">' + IC.group.replace('viewBox', 'width="34" height="34" viewBox') + '</span><h2>' + esc(g.name) + '</h2><div class="v">' + g.members.length + ' أفراد' + (g.owner ? ' · أنت صاحب القروب' : '') + '</div></div>' +
+      '<div class="gl codebox" style="box-shadow:none"><div class="cl"><small>رمز الدعوة</small><div class="code" style="font-size:27px;letter-spacing:.04em;white-space:nowrap">' + fmtCode(g.code) + '</div><small>كل فرد يدخله مرة وحدة من جهازه</small><div class="cbtns"><button id="gqCopy">نسخ</button><button id="gqShare">شارك</button></div></div><div class="qr" role="img" aria-label="باركود القروب">' + qrSVG(link) + '</div></div>' +
+      '<div class="flabel">الأفراد</div><div class="pls">' + g.members.map((m) => '<button class="pl" data-m="' + m.id + '">' + av(m.name || '؟', m.color || 0, '', m.on) + '<span class="pn"><b>' + esc(m.name || 'بدون اسم') + (m.me ? ' (أنت)' : '') + '</b><small>' + (m.on ? 'متصل الحين' : 'غير متصل') + '</small></span>' + (m.owner ? '<span class="pill host">صاحب القروب</span>' : '') + '</button>').join('') + '</div>' +
+      (g.owner ? '<div class="row2"><button class="link-btn" id="gqRen">غيّر الاسم</button><button class="link-btn" id="gqNew">رمز دعوة جديد</button></div>' : '') +
+      '<button class="link-btn danger" id="gqLeave">اطلع من القروب</button>', () => {
+      $('#gqCopy').onclick = async () => { try { await navigator.clipboard.writeText(g.code); toast('انسخ رمز القروب'); } catch (e) { toast(g.code); } };
+      $('#gqShare').onclick = async () => {
+        const text = 'تعال قروب «' + g.name + '» في حَرف 🔤\nرمز القروب: ' + fmtCode(g.code) + '\n' + link;
+        if (navigator.share) { try { await navigator.share({ text }); return; } catch (e) { if (e && e.name === 'AbortError') return; } }
+        try { await navigator.clipboard.writeText(text); toast('انسخ الرابط والرمز'); } catch (e) { toast(link); }
+      };
+      if (g.owner) {
+        $$('.pl[data-m]').forEach((b) => { const m = g.members.find((x) => x.id === +b.dataset.m); if (m && !m.me) b.onclick = () => confirmSheet('تطلّع ' + (m.name || 'هالفرد') + ' من القروب؟', 'يقدر يرجع إذا عنده رمز الدعوة. غيّر الرمز إذا ما تبيه يرجع.', 'طلّعه', async () => { const r = await api('/group', { tok: ptok(), a: 'kick', prof: m.id }); if (!r.error) applyMe(r); openGroup(); }, true); });
+        $('#gqRen').onclick = () => sheet('<h2>اسم القروب</h2><input class="tin" id="gqName" maxlength="30" value="' + esc(g.name) + '"><button class="link-btn primary" id="gqSave">حفظ</button>', () => {
+          $('#gqSave').onclick = async () => { const n = $('#gqName').value.trim(); if (!n) return; const r = await api('/group', { tok: ptok(), a: 'rename', name: n }); if (!r.error) applyMe(r); openGroup(); };
+        });
+        $('#gqNew').onclick = () => confirmSheet('رمز دعوة جديد؟', 'الرمز القديم يوقف، والأفراد الحاليين يبقون في القروب.', 'غيّر الرمز', async () => { const r = await api('/group', { tok: ptok(), a: 'newcode' }); if (!r.error) applyMe(r); openGroup(); });
+      }
+      $('#gqLeave').onclick = () => confirmSheet('تطلع من «' + g.name + '»؟', 'ألعابك تبقى في سجلك، وتقدر ترجع برمز الدعوة.', 'اطلع', async () => { const r = await api('/group', { tok: ptok(), a: 'leave' }); if (!r.error) applyMe(r); else toast(errText(r.error)); histTab = 'mine'; }, true);
+    });
+  }
+  /* ألعاب القروب الشغالة: الرئيسية تسأل كل ٨ ثواني */
+  const liveSeen = new Set();
+  setInterval(async () => {
+    if (current !== 'home' || document.hidden || !S.grp || !ptok()) return;
+    const r = await api('/live?tok=' + encodeURIComponent(ptok()));
+    if (r.error || !r.live) return;
+    const fresh = r.live.filter((l) => !l.mine && !liveSeen.has(l.id));
+    r.live.forEach((l) => liveSeen.add(l.id));
+    const changed = JSON.stringify(r.live) !== JSON.stringify(S.live || []);
+    S.live = r.live;
+    if (changed) { save(); renderGroupBox(); }
+    if (fresh.length && liveSeen.size > fresh.length) { SND.ding(); vib([60, 40, 60]); toast('لعبة جديدة في القروب: ' + fresh[0].name); }
+  }, 8000);
+
   /* ================= الإعدادات ================= */
   function renderSettings() {
     $('#setName').value = S.name || '';
     $('#setColor').innerHTML = COLORS.map((c, i) => '<button type="button" data-c="' + i + '" style="background:' + c + '" class="' + (i === S.color ? 'on' : '') + '" aria-label="لون ' + (i + 1) + '"></button>').join('');
-    $$('#setColor button').forEach((b) => (b.onclick = () => { S.color = +b.dataset.c; save(); renderSettings(); }));
+    $$('#setColor button').forEach((b) => (b.onclick = () => { S.color = +b.dataset.c; save(); renderSettings(); if (ptok() && S.name) api('/me', { a: 'me', tok: ptok(), name: S.name, color: S.color }); }));
     $('#setSound').setAttribute('aria-checked', !!S.sound);
     $('#setVib').setAttribute('aria-checked', !!S.vib);
     $$('#setTheme button').forEach((b) => b.classList.toggle('on', b.dataset.v === (S.theme || 'auto')));
     $('#verVal').textContent = 'v' + VERSION;
     $('#aboutVer').textContent = 'حَرف · الإصدار ' + VERSION;
+    $('#codeVal').innerHTML = S.prof && S.prof.code ? (S.prof.saved ? '<span class="ltr" style="font-family:var(--num)">' + fmtCode(S.prof.code) + '</span>' : '<span class="badge">احفظه</span>') : '';
+    $('#grpVal').textContent = S.grp ? S.grp.name : 'ما دخلت قروب';
+    $('#bakVal').textContent = S.backupAt ? 'آخر نسخة ' + fmtDate(S.backupAt) : '';
   }
-  $('#setName').addEventListener('input', (e) => { S.name = e.target.value.trim().slice(0, 20); save(); });
+  let nameT = 0;
+  $('#setName').addEventListener('input', (e) => {
+    S.name = e.target.value.trim().slice(0, 20); save();
+    clearTimeout(nameT); nameT = setTimeout(() => { if (ptok() && S.name) api('/me', { a: 'me', tok: ptok(), name: S.name, color: S.color }); }, 900);
+  });
+  $('#setCode').onclick = () => codeSheet();
+  $('#setRestore').onclick = () => restoreSheet();
+  $('#setBackup').onclick = exportBackup;
+  $('#setImport').onclick = importBackup;
+  $('#setGroup').onclick = () => openGroup();
   $('#setSound').onclick = () => { S.sound = !S.sound; save(); renderSettings(); if (S.sound) SND.pop(); };
   $('#setVib').onclick = () => { S.vib = !S.vib; save(); renderSettings(); vib(30); };
   $$('#setTheme button').forEach((b) => (b.onclick = () => { S.theme = b.dataset.v; save(); applyTheme(); renderSettings(); }));
@@ -987,11 +1321,16 @@
   renderHome();
   try { const prev = localStorage.getItem('harf-ver'); if (prev && prev !== VERSION) setTimeout(() => toast('تم تحديث حَرف إلى الإصدار ' + VERSION), 600); localStorage.setItem('harf-ver', VERSION); } catch (e) {}
   // الدخول من الباركود أو الرابط: harf.wamdarc.com/#j=123456
-  const hm = /[#&]j=(\d{6})/.exec(location.hash);
+  const hm = /[#&]j=(\d{6})/.exec(location.hash), qm = /[#&]q=(\d{8})/.exec(location.hash);
   if (hm) { history.replaceState(null, '', location.pathname); openJoin(hm[1]); }
+  else if (qm) { history.replaceState(null, '', location.pathname); openGroup(qm[1]); }
   else if (S.active) enterGame(S.active.g, S.active.t, S.active.me);
   let browsing = false; try { browsing = sessionStorage.getItem('harf-browse') === '1'; } catch (e) {}
-  if (!hm && !S.active && !isStandalone() && gateSupported() && !browsing) openGate();
+  if (!hm && !qm && !S.active && !isStandalone() && gateSupported() && !browsing) openGate();
+  // ملفي: ينشأ لحاله ويرفع ألعاب الجهاز، ويتحدث مع الرجوع للتطبيق
+  syncMe();
+  window.addEventListener('online', () => syncMe());
+  document.addEventListener('visibilitychange', () => { if (!document.hidden && Date.now() - lastSync > 60e3 && current !== 'game') syncMe(); });
 
   if ('serviceWorker' in navigator) {
     const hadController = !!navigator.serviceWorker.controller;
